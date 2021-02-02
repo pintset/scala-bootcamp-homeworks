@@ -1,3 +1,6 @@
+import scala.io.StdIn
+import scala.util.Try
+
 object Main extends App {
   // Classic
   def gcd(a: Int, b: Int): Int = {
@@ -34,14 +37,10 @@ object Main extends App {
   val lcmOpt = (a: Int, b: Int) => gcdOpt(a, b).map(gcd => a * b / gcd)
 
   // Execute
-  def run[R](fGcd: (Int, Int) => R, fLcm: (Int, Int) => R): Unit = {
+  def run(fGcd: (Int, Int) => Option[Int], fLcm: (Int, Int) => Option[Int]): Unit = {
     val input = (message: String) => {
       print(message)
-      try {
-        Some(scala.io.StdIn.readInt())
-      } catch {
-        case _: Exception => None
-      }
+      Try(scala.io.StdIn.readInt()).toOption
     }
 
     val a = input("Enter a: ")
