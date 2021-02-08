@@ -7,7 +7,7 @@ type Command =
     | Min of double list
     | Max of double list
 
-let concat (xs: string seq) = String.concat " " xs
+let concat (xs: 'a seq) = String.Join (' ', xs)
 
 let parseCommand (x: string) =
     let (|Number|_|) (x: string) =
@@ -22,7 +22,6 @@ let parseCommand (x: string) =
     let isCommand command = [ "sum"; "average"; "min"; "max" ] |> List.contains command
 
     match x.ToLowerInvariant().Split ([| ' ' |], StringSplitOptions.RemoveEmptyEntries) |> Array.toList with
-    | [ "divide"; Number _; Number divisor ] when divisor = 0. -> Error "Divisor cannot be 0"
     | [ "divide"; Number dividend; Number divisor ] -> Divide (dividend, divisor) |> Ok
     | [ "divide"; Number _; x ] -> Error $"Failed to parse divisor '{x}'"
     | [ "divide"; x; Number _ ] -> Error $"Failed to parse dividend '{x}'"
@@ -43,17 +42,17 @@ let parseCommand (x: string) =
 type CommandResult = CommandResult of Command * double
 
 let calculate c =
-    (c, match c with
-        | Divide (dividend, divisor) -> dividend / divisor
-        | Sum ns -> List.sum ns
-        | Average ns -> List.average ns
-        | Min ns -> List.min ns
-        | Max ns -> List.max ns)
-    |> CommandResult
+    match c with
+    | Divide (_, 0.) -> Error "Divisor cannot be 0"
+    | Divide (dividend, divisor) -> dividend / divisor |> Ok
+    | Sum ns -> List.sum ns |> Ok
+    | Average ns -> List.average ns |> Ok
+    | Min ns -> List.min ns |> Ok
+    | Max ns -> List.max ns |> Ok
+    |> Result.map (fun r -> CommandResult(c, r))
 
 let renderDoubleList c xs r =
-    let join (xs: 'a seq) = String.Join (' ', xs)
-    $"the {c} of {join xs} is {r}"
+    $"the {c} of {concat xs} is {r}"
 
 let renderResult = function
     | CommandResult (Divide (dividend, divisor), r) -> $"{dividend} divided by {divisor} is {r}"
@@ -63,7 +62,7 @@ let renderResult = function
     | CommandResult (Max ns, r) -> renderDoubleList "maximum" ns r
 
 let proc =
-    parseCommand >> (Result.map (calculate >> renderResult)) >> function Ok msg -> msg | Error msg -> $"Error: {msg}"
+    parseCommand >> Result.bind calculate >> Result.map renderResult >> function Ok msg -> msg | Error msg -> $"Error: {msg}"
 
 Seq.initInfinite (fun _ -> Console.ReadLine())
 |> Seq.takeWhile (not << String.IsNullOrEmpty)
