@@ -12,6 +12,9 @@ project/target/
 .metals
 metals.sbt
 
+# Ionide
+.ionide
+
 # User-specific files
 *.rsuser
 *.suo
