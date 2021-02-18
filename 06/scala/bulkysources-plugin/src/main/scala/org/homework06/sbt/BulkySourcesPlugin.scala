@@ -18,7 +18,7 @@ object BulkySourcesPlugin extends AutoPlugin {
       (sources in bulkySources).value.flatMap { file =>
         val linesCount = IO.readLines(file).length
         if (linesCount >= linesThreshold) Some(linesCount, file) else None
-      }
+      }.sorted.reverse
     }
   )
 
