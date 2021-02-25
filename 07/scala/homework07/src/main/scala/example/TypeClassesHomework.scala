@@ -85,25 +85,25 @@ object AdvancedHomework extends App {
   // Exercise: create a typeclass for flatMap method
   // Considering there is a flatMap in Scala, I did implementation using F# naming - bind
   trait Bind[E[_]] {
-    def bind[T](eT: E[T], f: T => E[T]): E[T]
+    def bind[A, B](eT: E[A], f: A => E[B]): E[B]
   }
 
   object BindSyntax {
-    implicit class BindOps[T, E[_]](eT: E[T]) {
-      def bind(f: T => E[T])(implicit bindable: Bind[E]): E[T] = bindable.bind(eT, f)
+    implicit class BindOps[A, B, E[_]](eT: E[A]) {
+      def bind(f: A => E[B])(implicit bindable: Bind[E]): E[B] = bindable.bind(eT, f)
     }
   }
 
   implicit val optionBind: Bind[Option] = new Bind[Option] {
-    def bind[T](eT: Option[T], f: T => Option[T]): Option[T] = eT match {
+    def bind[A, B](eT: Option[A], f: A => Option[B]): Option[B] = eT match {
       case Some(t) => f(t)
       case _ => None
     }
   }
 
   implicit val listBind: Bind[List] = new Bind[List] {
-    def bind[T](eT: List[T], f: T => List[T]): List[T] = eT match {
-      case head :: tail => f(head).concat(bind(tail, f))
+    def bind[A, B](eT: List[A], f: A => List[B]): List[B] = eT match {
+      case head :: tail => f(head) ::: bind(tail, f)
       case _ => Nil
     }
   }
@@ -111,13 +111,12 @@ object AdvancedHomework extends App {
   import BindSyntax._
 
   def divide(x: Int, y: Int): Option[Int] = if (y == 0) None else Some(x / y)
-
   val someFive: Option[Int] = Some(5)
   println(someFive.bind { divide(10, _) })
 
-  def duplicate[A](x: A): List[A] = List(x, x)
+  def duplicateAndToString[A](x: A): List[String] = List(x.toString, x.toString)
   val someList: List[Int] = (1 to 5).toList
-  println(someList.bind(duplicate))
+  println(someList.bind(duplicateAndToString))
 }
 
 object TypeclassTask extends App {
