@@ -78,14 +78,13 @@ object CollectionsLeetCodeOptional extends App {
     def toState(count: Int, cur: Int): (Int, Int) =
       if (cur == 0) (count + 1, cur) else (count, cur)
 
-      s.foldLeft(0, 0) { (state, c) => {
-        val (count, cur) = state
+      s.foldLeft(0, 0) { case ((count, cur), c) =>
         c match {
           case 'L' => toState(count, cur - 1)
           case 'R' => toState(count, cur + 1)
           case _ => (count, cur)
         }
-      }}._1
+      }._1
     }
 
   assert(balancedStringSplit("RLRRLLRLRL") == 4)
