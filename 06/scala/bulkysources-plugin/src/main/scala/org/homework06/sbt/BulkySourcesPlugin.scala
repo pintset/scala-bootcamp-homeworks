@@ -5,6 +5,7 @@ import sbt.{Def, _}
 import complete.DefaultParsers._
 
 object BulkySourcesPlugin extends AutoPlugin {
+  override def trigger = allRequirements
 
   lazy val bulkyThresholdInLines = settingKey[Int]("Defines threshold in lines for bulkySources task")
   lazy val bulkySources = inputKey[Seq[(Int, File)]]("Returns the source files which have no less lines than defined in bulkyThresholdInLines or specified by argument")

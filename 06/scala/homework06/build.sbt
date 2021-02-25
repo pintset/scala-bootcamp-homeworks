@@ -6,7 +6,7 @@ ThisBuild / organization     := "com.example"
 ThisBuild / organizationName := "example"
 
 lazy val root = (project in file("."))
-  .enablePlugins(org.homework06.sbt.BulkySourcesPlugin)
+  // .enablePlugins(org.homework06.sbt.BulkySourcesPlugin)
   .settings(
     name := "homework06",
     libraryDependencies += scalaTest % Test
