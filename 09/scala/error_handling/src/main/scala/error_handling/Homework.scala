@@ -4,6 +4,10 @@ import cats.Show
 import cats.data.Validated.Invalid
 import cats.data.ValidatedNec
 import cats.syntax.all._
+import error_handling.Homework.PaymentCardValidator.AllErrorsOr
+
+import java.time.{Year, YearMonth}
+import java.time.format.DateTimeFormatter
 
 // Homework. Place the solution under `error_handling` package in your homework repository.
 //
@@ -11,7 +15,12 @@ import cats.syntax.all._
 // 2. Add `ValidationError` cases (at least 5, may be more).
 // 3. Implement `validate` method to construct `PaymentCard` instance from the supplied raw data.
 object Homework extends App {
-  case class PaymentCard(name: String, number: String, expirationDate: String, securityCode: String)
+  final case class PaymentCard private (name: String, number: String, expirationDate: YearMonth, securityCode: String)
+
+  object PaymentCard {
+    def apply(name: String, number: String, expirationDate: String, securityCode: String): AllErrorsOr[PaymentCard] =
+      PaymentCardValidator.validate(name, number, expirationDate, securityCode)
+  }
 
   sealed trait ValidationError
   object ValidationError {
@@ -112,8 +121,8 @@ object Homework extends App {
         validateChars.andThen(validateLength).andThen(validateNumber)
       }
 
-      def validateExpirationDate: AllErrorsOr[String] = {
-        def validateMonth(month: String): AllErrorsOr[String] = {
+      def validateExpirationDate: AllErrorsOr[YearMonth] = {
+        def validateMonth(month: String): AllErrorsOr[Int] = {
           def areDigits: AllErrorsOr[Int] =
             month.toIntOption.toValidNec(ValidationError.CardExpirationMonthCanContainOnlyDigits)
 
@@ -121,7 +130,7 @@ object Homework extends App {
             if (month >= 1 && month <= 12) month.validNec
             else ValidationError.CardExpirationMonthIsOutOfRange.invalidNec
 
-          areDigits.andThen(validRange).map(_ => month)
+          areDigits.andThen(validRange)
         }
 
         def validateYear(year: String): AllErrorsOr[String] = {
@@ -135,8 +144,10 @@ object Homework extends App {
           areDigits.andThen(validRange).map(_ => year)
         }
 
+        val YEAR_FORMAT = DateTimeFormatter.ofPattern("[yyyy][yy]") // Can convert 4 digits year too
         expirationDate.split('/').map(_.strip) match {
-          case Array(month, year) => (validateMonth(month), validateYear(year)).mapN { case (month, year) => s"$month/$year" }
+          case Array(month, year) => (validateMonth(month), validateYear(year)).mapN { case (month, year) =>
+            YearMonth.of(Year.parse(year, YEAR_FORMAT).getValue, month) }
           case _ => ValidationError.CardExpirationDateHasInvalidFormat.invalidNec
         }
       }
@@ -170,8 +181,8 @@ object Homework extends App {
 
   implicit val stringShow: Show[ValidationError] = t => t.toString
 
-  val visa = PaymentCardValidator.validate("DENIS TERLETSKIY", "4024 0071 4041 3922", "03/21", "544")
-  val americanExpress = PaymentCardValidator.validate("DENIS TERLETSKIY", "3781 495977 58944", "03/21", "7997")
+  val visa = PaymentCard("DENIS TERLETSKIY", "4024 0071 4041 3922", "03/21", "544")
+  val americanExpress = PaymentCard("DENIS TERLETSKIY", "3781 495977 58944", "03/21", "7997")
 
   val messages =
     Seq(visa, americanExpress).map {
