@@ -27,14 +27,14 @@ object MinTextHash extends IOApp {
 
   def getSource(blocker: Blocker)(implicit contextShift: ContextShift[IO], sync: Sync[IO]): IO[BufferedSource] =
     blocker.delay {
-      println(s"operation - ${ Thread.currentThread().getName }")
+      // println(s"operation - ${ Thread.currentThread().getName }")
       print("Please enter file path: ")
       Source.fromFile(scala.io.StdIn.readLine())
     }.handleErrorWith(_ => IO(println("Unable to open file")) *> getSource(blocker))
 
   def getSeed(blocker: Blocker)(implicit contextShift: ContextShift[IO], sync: Sync[IO]): IO[Int] =
     blocker.delay {
-      println(s"operation - ${ Thread.currentThread().getName }")
+      // println(s"operation - ${ Thread.currentThread().getName }")
       print("Please enter seed: ")
       scala.io.StdIn.readLine().toInt
     }.handleErrorWith(_ => IO(println("Unable to parse seed")) *> getSeed(blocker))
