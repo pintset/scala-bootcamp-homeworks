@@ -97,7 +97,7 @@ allSubsetsOfSizeN (Set.ofList [ 1; 2; 3 ]) 2 |> shouldEqualTo (set [
 // Input `Map("a" -> 1, "b" -> 2, "c" -> 4, "d" -> 1, "e" -> 0, "f" -> 2, "g" -> 2)` should result in
 // output `List(Set("e") -> 0, Set("a", "d") -> 1, Set("b", "f", "g") -> 2, Set("c") -> 4)`.
 let sortConsideringEqualValues map =
-    map |> Map.toList |> List.groupBy snd |> List.map (fun (c, xs) -> xs |> List.map fst |> List.sort |> Set.ofList, c) |> List.sortBy snd
+    map |> Map.toList |> List.groupBy snd |> List.map (fun (c, xs) -> xs |> List.map fst |> Set.ofList, c) |> List.sortBy snd
 
 let input = Map.ofList [
     'f', 2

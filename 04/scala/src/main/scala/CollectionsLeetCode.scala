@@ -47,8 +47,8 @@ object CollectionsLeetCode extends App {
   def shuffle(nums: List[Int]): List[Int] = nums match {
     case Nil => Nil
     case xs if xs.length % 2 == 0 => {
-      val (l1, l2) = nums.splitAt(nums.length / 2)
-      l1.zip(l2).flatMap { i => List(i._1, i._2) }
+      val (xs, ys) = nums.splitAt(nums.length / 2)
+      xs.zip(ys).flatMap { case (x, y) => List(x, y) }
     }
     case xs => xs
   }

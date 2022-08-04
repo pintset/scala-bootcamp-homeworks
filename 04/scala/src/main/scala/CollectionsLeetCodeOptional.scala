@@ -31,8 +31,7 @@ object CollectionsLeetCodeOptional extends App {
   // Output: 0
 
   def maxDepth(s: String): Int =
-    s.foldLeft(0, 0) { (state, c) =>
-      val (max, cur) = state
+    s.foldLeft(0, 0) { case ((max, cur), c) =>
       c match {
         case '(' => (Math.max(max, cur + 1), cur + 1)
         case ')' => (max, cur - 1)
@@ -47,6 +46,8 @@ object CollectionsLeetCodeOptional extends App {
   assert(maxDepth("(1)+((2))+(((3)))") == 3)
   assert(maxDepth("1+(2*3)/(2-1)") == 1)
   assert(maxDepth("1") == 0)
+  assert(maxDepth(")(") == 0)
+  assert(maxDepth("(()") == 0)
 
   // https://leetcode.com/problems/split-a-string-in-balanced-strings/
   //
@@ -94,7 +95,8 @@ object CollectionsLeetCodeOptional extends App {
 
   // https://leetcode.com/problems/matrix-block-sum/
   //
-  // Given a m * n matrix mat and an integer K, return a matrix answer where each answer[i][j] is the sum of all elements mat[r][c] for i - K <= r <= i + K, j - K <= c <= j + K, and (r, c) is a valid position in the matrix.
+  // Given a m * n matrix mat and an integer K, return a matrix answer where each answer[i][j] is the sum of all
+  // elements mat[r][c] for i - K <= r <= i + K, j - K <= c <= j + K, and (r, c) is a valid position in the matrix.
   //
   // Example 1
   // Input: mat = [[1,2,3],[4,5,6],[7,8,9]], K = 1
@@ -107,13 +109,15 @@ object CollectionsLeetCodeOptional extends App {
   def matrixBlockSum(mat: Array[Array[Int]], k: Int): Array[Array[Int]] = {
     val rowCount = mat.length
     val columnCount = mat(0).length
-    val indices: (Int, Int) => IndexedSeq[(Int, Int)] = (i, j) => for {
+
+    def indices(i: Int, j: Int): Seq[(Int, Int)] = for {
         x <- (i - k) to (i + k)
         y <- (j - k) to (j + k)
-        if x >= 0 && y >= 0 && x < rowCount && y < rowCount
+        if x >= 0 && y >= 0 && x < rowCount && y < columnCount
     } yield (x, y)
 
-    Array.tabulate(rowCount, columnCount)((r, c) => indices(r, c).map(x => mat(x._1)(x._2)).sum)
+    Array.tabulate(rowCount, columnCount)((r, c) => indices(r, c).map { case (r, c) => mat(r)(c) }.sum)
+    // Array.tabulate(rowCount, columnCount)((r, c) => indices(r, c).map { case (r, c) => mat.lift(r).flatMap(_.lift(c)).getOrElse(0) }.sum)
   }
 
   def assert2DArrays(mat1: Array[Array[Int]], mat2: Array[Array[Int]]): Unit =

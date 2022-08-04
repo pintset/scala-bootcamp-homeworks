@@ -57,11 +57,8 @@ object DataStructures extends App {
   //   - For other `n`, for each `set` element `elem`, generate all subsets of size `n - 1` from the set
   //     that don't include `elem`, and add `elem` to them.
 
-  // WARNING - modified signature. I used array and had to add ClassTag due to this:
-  // https://stackoverflow.com/questions/62293550/scala-how-to-convert-generic-list-to-array-and-avoid-no-classtag-available-fo
-  // Please suggest your solution, or suggest other collection with indexed access
-  def allSubsetsOfSizeN[A](set: Set[A], n: Int)(implicit ev: scala.reflect.ClassTag[A]): Set[Set[A]] = {
-    val arr = set.toArray
+  def allSubsetsOfSizeN[A](set: Set[A], n: Int): Set[Set[A]] = {
+    val arr = set.toVector
     def inner(lo: Int, n: Int): List[List[A]] = n match {
       case 0 => List(Nil)
       case i => for {
@@ -92,10 +89,8 @@ object DataStructures extends App {
   // Input `Map("a" -> 1, "b" -> 2, "c" -> 4, "d" -> 1, "e" -> 0, "f" -> 2, "g" -> 2)` should result in
   // output `List(Set("e") -> 0, Set("a", "d") -> 1, Set("b", "f", "g") -> 2, Set("c") -> 4)`.
   //
-  // WARNING - modified signature. Had to add Ordering implicit and convert to list in order to sort
-  // Please suggest your solution
-  def sortConsideringEqualValues[T](map: Map[T, Int])(implicit ord: Ordering[T]): List[(Set[T], Int)] =
-    map.groupBy(_._2).map { x => (x._2.keys.toList.sorted.toSet, x._1) }.toList.sortBy(_._2)
+  def sortConsideringEqualValues[T](map: Map[T, Int]): List[(Set[T], Int)] =
+    map.groupBy(_._2).map { x => (x._2.keys.toSet, x._1) }.toList.sortBy(_._2)
 
   val input = Map("a" -> 1, "b" -> 2, "c" -> 4, "d" -> 1, "e" -> 0, "f" -> 2, "g" -> 2)
   val expected = List(Set("e") -> 0, Set("a", "d") -> 1, Set("b", "f", "g") -> 2, Set("c") -> 4)
