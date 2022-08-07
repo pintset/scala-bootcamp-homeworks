@@ -1,0 +1,1 @@
+addSbtPlugin("org.homework06.sbt" % "bulkysources-plugin" % "1.5")

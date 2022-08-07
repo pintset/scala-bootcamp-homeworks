@@ -1,6 +1,4 @@
 object Main extends App {
-  sealed trait Shape extends Located with Bounded with Area
-
   sealed trait Located {
     def x: Double
     def y: Double
@@ -17,55 +15,53 @@ object Main extends App {
     def area: Double
   }
 
-  sealed trait Volume {
-    def volume: Double
-  }
+  sealed trait Shape extends Located with Bounded with Area
 
   final case class Point(x: Double, y: Double) extends Shape {
-    override def minX: Double = x
-    override def maxX: Double = x
-    override def minY: Double = y
-    override def maxY: Double = y
+    def minX: Double = x
+    def maxX: Double = x
+    def minY: Double = y
+    def maxY: Double = y
 
-    override def area: Double = 1.0
+    def area: Double = 1.0
   }
 
   final case class Circle(centerX: Double, centerY: Double, radius: Double) extends Shape {
-    override def x: Double = centerX
-    override def y: Double = centerY
+    def x: Double = centerX
+    def y: Double = centerY
 
-    override def minX: Double = centerX - radius
-    override def maxX: Double = centerX + radius
-    override def minY: Double = centerY - radius
-    override def maxY: Double = centerY + radius
+    def minX: Double = centerX - radius
+    def maxX: Double = centerX + radius
+    def minY: Double = centerY - radius
+    def maxY: Double = centerY + radius
 
-    override def area: Double = Math.PI * radius * radius
+    def area: Double = Math.PI * radius * radius
   }
 
-  case class Rectangle(centerX: Double, centerY: Double, width: Double, height: Double) extends Shape {
+  final case class Rectangle(centerX: Double, centerY: Double, width: Double, height: Double) extends Shape {
     private def halfOf(x: Double): Double = x / 2
 
-    override def x: Double = centerX
-    override def y: Double = centerY
-    override def minX: Double = centerX - halfOf(width)
-    override def maxX: Double = centerX + halfOf(width)
-    override def minY: Double = centerY - halfOf(height)
-    override def maxY: Double = centerY + halfOf(height)
+    def x: Double = centerX
+    def y: Double = centerY
+    def minX: Double = centerX - halfOf(width)
+    def maxX: Double = centerX + halfOf(width)
+    def minY: Double = centerY - halfOf(height)
+    def maxY: Double = centerY + halfOf(height)
 
-    override def area: Double = width * height
+    def area: Double = width * height
   }
 
   final case class Square(centerX: Double, centerY: Double, side: Double) extends Shape {
     private val square = Rectangle(centerX, centerY, side, side)
 
-    override def x: Double = centerX
-    override def y: Double = centerY
-    override def minX: Double = square.minX
-    override def maxX: Double = square.maxX
-    override def minY: Double = square.minY
-    override def maxY: Double = square.maxY
+    def x: Double = centerX
+    def y: Double = centerY
+    def minX: Double = square.minX
+    def maxX: Double = square.maxX
+    def minY: Double = square.minY
+    def maxY: Double = square.maxY
 
-    override def area: Double = square.area
+    def area: Double = square.area
   }
 
   final case class Triangle(xA: Double, yA: Double, xB: Double, yB: Double, xC: Double, yC: Double) extends Shape {
@@ -74,18 +70,16 @@ object Main extends App {
     private def avg(xs: Array[Double]): Double = xs.sum / xs.length
 
     // Centroid
-    override def x: Double = avg(xs)
-    override def y: Double = avg(ys)
+    def x: Double = avg(xs)
+    def y: Double = avg(ys)
 
-    override def minX: Double = xs.min
-    override def maxX: Double = xs.max
-    override def minY: Double = ys.min
-    override def maxY: Double = ys.max
+    def minX: Double = xs.min
+    def maxX: Double = xs.max
+    def minY: Double = ys.min
+    def maxY: Double = ys.max
 
-    override def area: Double = Math.abs((xB - xA) * (yC - yA) - (xC - xA) * (yB - yA)) / 2
+    def area: Double = Math.abs((xB - xA) * (yC - yA) - (xC - xA) * (yB - yA)) / 2
   }
-
-  sealed trait Shape3d extends Shape with BoundedZ with LocatedZ with Volume
 
   sealed trait LocatedZ {
     def z: Double
@@ -96,66 +90,72 @@ object Main extends App {
     def maxZ: Double
   }
 
-  final case class Point3d(x: Double, y: Double, z: Double) extends Shape3d {
-    override def minX: Double = x
-    override def maxX: Double = x
-    override def minY: Double = y
-    override def maxY: Double = y
-    override def minZ: Double = z
-    override def maxZ: Double = z
+  sealed trait Volume {
+    def volume: Double
+  }
 
-    override def area: Double = 1.0
-    override def volume: Double = 1.0
+  sealed trait Shape3d extends Shape with BoundedZ with LocatedZ with Volume
+
+  final case class Point3d(x: Double, y: Double, z: Double) extends Shape3d {
+    def minX: Double = x
+    def maxX: Double = x
+    def minY: Double = y
+    def maxY: Double = y
+    def minZ: Double = z
+    def maxZ: Double = z
+
+    def area: Double = 1.0
+    def volume: Double = 1.0
   }
 
   final case class Sphere(centerX: Double, centerY: Double, centerZ: Double, radius: Double) extends Shape3d {
-    override def x: Double = centerX
-    override def y: Double = centerY
-    override def z: Double = centerZ
+    def x: Double = centerX
+    def y: Double = centerY
+    def z: Double = centerZ
 
-    override def minX: Double = centerX - radius
-    override def maxX: Double = centerX + radius
-    override def minY: Double = centerY - radius
-    override def maxY: Double = centerY + radius
-    override def minZ: Double = centerZ - radius
-    override def maxZ: Double = centerZ + radius
+    def minX: Double = centerX - radius
+    def maxX: Double = centerX + radius
+    def minY: Double = centerY - radius
+    def maxY: Double = centerY + radius
+    def minZ: Double = centerZ - radius
+    def maxZ: Double = centerZ + radius
 
-    override def area: Double = 4 * Math.PI * radius * radius
-    override def volume: Double = 4 * Math.PI * Math.pow(radius, 3) / 3
+    def area: Double = 4 * Math.PI * radius * radius
+    def volume: Double = 4 * Math.PI * Math.pow(radius, 3) / 3
   }
 
-  case class Cuboid(centerX: Double, centerY: Double, centerZ: Double, width: Double, height: Double, depth: Double) extends Shape3d {
+  final case class Cuboid(centerX: Double, centerY: Double, centerZ: Double, width: Double, height: Double, depth: Double) extends Shape3d {
     private def halfOf(x: Double): Double = x / 2
 
-    override def x: Double = centerX
-    override def y: Double = centerY
-    override def z: Double = centerZ
-    override def minX: Double = centerX - halfOf(width)
-    override def maxX: Double = centerX + halfOf(width)
-    override def minY: Double = centerY - halfOf(height)
-    override def maxY: Double = centerY + halfOf(height)
-    override def minZ: Double = centerZ - halfOf(depth)
-    override def maxZ: Double = centerZ + halfOf(depth)
+    def x: Double = centerX
+    def y: Double = centerY
+    def z: Double = centerZ
+    def minX: Double = centerX - halfOf(width)
+    def maxX: Double = centerX + halfOf(width)
+    def minY: Double = centerY - halfOf(height)
+    def maxY: Double = centerY + halfOf(height)
+    def minZ: Double = centerZ - halfOf(depth)
+    def maxZ: Double = centerZ + halfOf(depth)
 
-    override def area: Double = 2 * (width * height + height * depth + width * depth)
-    override def volume: Double = width * height * depth
+    def area: Double = 2 * (width * height + height * depth + width * depth)
+    def volume: Double = width * height * depth
   }
 
-  final case class Cube(val centerX: Double, val centerY: Double, val centerZ: Double, side: Double) extends Shape3d {
+  final case class Cube(centerX: Double, centerY: Double, centerZ: Double, side: Double) extends Shape3d {
     private val cube = Cuboid(centerX, centerY, centerZ, side, side, side)
 
-    override def x: Double = centerX
-    override def y: Double = centerY
-    override def z: Double = centerZ
-    override def minX: Double = cube.minX
-    override def maxX: Double = cube.maxX
-    override def minY: Double = cube.minY
-    override def maxY: Double = cube.maxY
-    override def minZ: Double = cube.minZ
-    override def maxZ: Double = cube.maxZ
+    def x: Double = centerX
+    def y: Double = centerY
+    def z: Double = centerZ
+    def minX: Double = cube.minX
+    def maxX: Double = cube.maxX
+    def minY: Double = cube.minY
+    def maxY: Double = cube.maxY
+    def minZ: Double = cube.minZ
+    def maxZ: Double = cube.maxZ
 
-    override def area: Double = cube.area
-    override def volume: Double = cube.volume
+    def area: Double = cube.area
+    def volume: Double = cube.volume
   }
 
   final case class Triangle3d(xA: Double, yA: Double, zA: Double, xB: Double, yB: Double, zB: Double, xC: Double, yC: Double, zC: Double, origin: Point3d) extends Shape3d {
@@ -166,18 +166,18 @@ object Main extends App {
     private def avg(xs: Array[Double]): Double = xs.sum / xs.length
 
     // Centroid
-    override def x: Double = avg(xs)
-    override def y: Double = avg(ys)
-    override def z: Double = avg(zs)
+    def x: Double = avg(xs)
+    def y: Double = avg(ys)
+    def z: Double = avg(zs)
 
-    override def minX: Double = xs.min
-    override def maxX: Double = xs.max
-    override def minY: Double = ys.min
-    override def maxY: Double = ys.max
-    override def minZ: Double = zs.min
-    override def maxZ: Double = zs.max
+    def minX: Double = xs.min
+    def maxX: Double = xs.max
+    def minY: Double = ys.min
+    def maxY: Double = ys.max
+    def minZ: Double = zs.min
+    def maxZ: Double = zs.max
 
-    override def area: Double = {
+    def area: Double = {
       def sqr(x: Double): Double = x * x
 
       Math.sqrt(
@@ -186,7 +186,7 @@ object Main extends App {
           + sqr(yB * zA - yC * zA - yA * zB + yC * zB + yA * zC - yB * zC)) / 2
     }
 
-    override def volume: Double = ???
+    def volume: Double = ???
   }
 
   def printArea(shape: Area): Unit = println(s"$shape area is ${shape.area}")

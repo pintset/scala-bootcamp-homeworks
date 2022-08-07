@@ -1,42 +1,36 @@
+open System
+
 module Types =
     type NaturalNumber = private NaturalNumber of int
 
     module NaturalNumber =
-        let fromInt n = if n > 0 then NaturalNumber n |> Some else None
-        let toInt (NaturalNumber n) = n
+        let parse (s: String) = s |> Int32.TryParse |> function true, v when v > 0 -> Some <| NaturalNumber v | _ -> None 
+        let (<*>) f (NaturalNumber n) = f n
 
-        let gcd (NaturalNumber a) (NaturalNumber b) =
-            let rec inner a b =
-                let m = a % b
-                if m = 0 then (NaturalNumber b) else inner b m
-            if a > b then inner a b else inner b a
+        module private Core =
+            let gcd a b =
+                let rec inner a b =
+                    let m = a % b
+                    if m = 0 then b else inner b m
+                if a > b then inner a b else inner b a
 
-        let lcm a b =
-            let gcd = gcd a b |> toInt
-            let a, b = a |> toInt, b |> toInt
-            NaturalNumber <| a * b / gcd
+            let lcm a b = a * b / (gcd a b)
 
-open System
+        let gcd a b = Core.gcd <*> a <*> b
+        let lcm a b = Core.lcm <*> a <*> b
+
 open Types
 
-// Execute (without input parse check here)
-let input message =
-    printf message
-    Console.ReadLine () |> Int32.Parse
+let readNatNum p =
+    printf "Enter %s: " p
+    Console.ReadLine () |> NaturalNumber.parse
 
-let calc f a b =
-    let toTupleOpt = function
-    | Some a, Some b -> Some (a, b)
-    | _ -> None
+let calc a b =
+    let (<*>) = NaturalNumber.(<*>)
+    let result a b gcd lcm = $"gcd({a}, {b}) = {gcd} and lcm({a}, {b}) = {lcm}"
+    result <*> a <*> b <| NaturalNumber.gcd a b <| NaturalNumber.lcm a b
 
-    (NaturalNumber.fromInt a, NaturalNumber.fromInt b)
-    |> toTupleOpt 
-    |> Option.map (fun (a, b) -> f a b)
-
-let gcd = calc NaturalNumber.gcd
-let lcm = calc NaturalNumber.lcm
-
-let a = input "Enter a: "
-let b = input "Enter b: "
-
-printfn $"gcd({a}, {b}) = %A{gcd a b} and lcm({a}, {b}) = %A{lcm a b}"
+(readNatNum "a", readNatNum "b")
+||> Option.map2 calc
+|>  Option.defaultValue "Failed to parse parameters. Natural numbers are expected"
+|>  Console.WriteLine

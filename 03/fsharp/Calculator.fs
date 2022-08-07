@@ -1,5 +1,11 @@
 ﻿open System
 
+// Instead of FsToolkit.ErrorHandling
+module Result =
+    let fold errF okF = function
+        | Ok v -> okF v
+        | Error e -> errF e
+
 type Command =
     | Divide of double * double
     | Sum of double list
@@ -26,12 +32,13 @@ let parseCommand (x: string) =
     | [ "divide"; Number _; x ] -> Error $"Failed to parse divisor '{x}'"
     | [ "divide"; x; Number _ ] -> Error $"Failed to parse dividend '{x}'"
     | [ "divide"; n1; n2 ] -> Error $"Failed to parse divisor '{n1}' and dividend '{n2}'"
-    | "divide" :: ns when ns.Length <> 2 -> Error $"'divide' command requires dividend and divisor specified"
+    | "divide" :: _ -> Error $"'divide' command requires dividend and divisor specified"
 
     | "sum" :: Numbers ns -> Sum ns |> Ok
     | "average" :: Numbers ns -> Average ns |> Ok
     | "min" :: Numbers ns -> Min ns |> Ok
     | "max" :: Numbers ns -> Max ns |> Ok
+
     | [ command ] when isCommand command -> Error $"'{command}' command requires at least one number as an argument"
     | command :: numbers when isCommand command -> Error $"Failed to parse numbers '{concat numbers}'"
     | [] -> Error $"No command specified"
@@ -62,7 +69,8 @@ let renderResult = function
     | CommandResult (Max ns, r) -> renderDoubleList "maximum" ns r
 
 let proc =
-    parseCommand >> Result.bind calculate >> Result.map renderResult >> function Ok msg -> msg | Error msg -> $"Error: {msg}"
+    // parseCommand >> Result.bind calculate >> Result.map renderResult >> function Ok msg -> msg | Error msg -> $"Error: {msg}"
+    parseCommand >> Result.bind calculate >> Result.map renderResult >> Result.fold (fun msg -> $"Error: {msg}") id
 
 Seq.initInfinite (fun _ -> Console.ReadLine())
 |> Seq.takeWhile (not << String.IsNullOrEmpty)
