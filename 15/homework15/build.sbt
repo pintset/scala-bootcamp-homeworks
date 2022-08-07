@@ -7,7 +7,7 @@ ThisBuild / organizationName := "example"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "homework12",
+    name := "homework15",
     libraryDependencies ++= Seq(
       scalaTest % Test,
       "org.typelevel" %% "cats-core" % "2.2.0"
