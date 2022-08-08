@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  PROJECT_NAME: "13"
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -37,28 +34,26 @@ jobs:
             echo "detected changes in $item" 
             # doing >> $GITHUB_ENV doesn't work here ☹️
             # if more than one project level change is detected, the output will be the last one here 😬
-            echo "::set-output name=output1::$item"
-
-      - id: update_variables
-        name: Update variables
-        run: echo PROJECT_NAME=${{ steps.read_projects.outputs.output1 }} >> $GITHUB_ENV
+            echo "::set-output name=project_name::$item"
 
       - id: eval_project_name
         name: Evaluate project name
-        run: |
-          # echo ${{steps.read_projects.outputs.output1 }}
-          echo $PROJECT_NAME
+        if: "${{ steps.read_projects.outputs.project_name != '' }}"
+        run: echo ${{ steps.read_projects.outputs.project_name }}
 
       - id: run_tests
         name: Run tests
-        working-directory: ${{ env.PROJECT_NAME }}/scala
+        working-directory: ${{ steps.read_projects.outputs.project_name }}/scala
+        if: "${{ steps.read_projects.outputs.project_name != '' }}"
         run: sbt coverage test
 
       - id: create_coverage_report
         name: Create coverage report
-        working-directory: ${{ env.PROJECT_NAME }}/scala
+        working-directory: ${{ steps.read_projects.outputs.project_name }}/scala
+        if: "${{ steps.read_projects.outputs.project_name != '' }}"
         run: sbt coverageReport
 
       - id: upload_coverage_report
         name: Upload coverage report to Codecov
+        if: "${{ steps.read_projects.outputs.project_name != '' }}"
         uses: codecov/codecov-action@v1
