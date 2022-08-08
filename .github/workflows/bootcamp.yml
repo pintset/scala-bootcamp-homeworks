@@ -45,7 +45,7 @@ jobs:
         name: Run tests
         working-directory: ${{ steps.read_projects.outputs.project_name }}/scala
         if: "${{ steps.read_projects.outputs.project_name != '' }}"
-        run: sbt coverage test
+        run: sbt test
 
       # - id: create_coverage_report
       #   name: Create coverage report
