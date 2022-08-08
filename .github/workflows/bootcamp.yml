@@ -1,0 +1,64 @@
+name: Scala Bootcamp Homeworks CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_NAME: "13"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v2
+
+      - id: detect_changes
+        name: Detect changes
+        uses: zattoo/recognition@v2
+        with:
+          Domains: '{"01": ["01/scala"], "02": ["02/scala"], "03": ["03/scala"], "04": ["04/scala"], "05": ["05/scala"],
+                     "06": ["06/scala"], "08": ["08/scala"], "10": ["10/scala"],
+                     "11": ["11/scala"], "12": ["12/scala"], "13": ["13/scala"], "14": ["14/scala"], "15": ["15/scala"],
+                     "16": ["16/scala"], "17": ["17/scala"], "18": ["18/scala"], "19": ["19/scala"], "20": ["20/scala"],
+                     "21": ["21/scala"], "22": ["22/scala"], "23": ["23/scala"], "24": ["24/scala"]}' # name : path
+          token: ${{github.token}}
+
+      - id: read_projects
+        name: Read projects
+        uses: Stockopedia/action-run-on-list@v1
+        with:
+          list: ${{ steps.detect_changes.outputs.projects }}
+          command: |
+            echo "detected changes in $item" 
+            # doing >> $GITHUB_ENV doesn't work here ☹️
+            # if more than one project level change is detected, the output will be the last one here 😬
+            echo "::set-output name=output1::$item"
+
+      - id: update_variables
+        name: Update variables
+        run: echo PROJECT_NAME=${{ steps.read_projects.outputs.output1 }} >> $GITHUB_ENV
+
+      - id: eval_project_name
+        name: Evaluate project name
+        run: |
+          # echo ${{steps.read_projects.outputs.output1}}
+          echo $PROJECT_NAME
+
+      - id: run_tests
+        name: Run tests
+        working-directory: ./$PROJECT_NAME/scala
+        run: sbt coverage test
+
+      - id: create_coverage_report
+        name: Create coverage report
+        working-directory: ./$PROJECT_NAME/scala
+        run: sbt coverageReport
+
+      - id: upload_coverage_report
+        name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v1
