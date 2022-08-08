@@ -16,3 +16,4 @@ You can use `sbt new scala/hello-world.g8` to start a new bare-bones Scala SBT p
 Scala version of implementation uses monadic approach to parse and supply parameters for gcm/lcd calculation. F# version uses applicative approach.
 
 In addition, F# version *gcdlcmsafe.fsx* operates with custom `NaturalNumber` type, which represents natural numbers of `int`.
+
