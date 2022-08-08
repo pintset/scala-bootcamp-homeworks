@@ -2,7 +2,7 @@
 
 This repo contains homeworks for Scala Bootcamp 2021
 
-![Scala CI](https://github.com/pintset/scala-bootcamp-homework/workflows/Scala%20Bootcamp%20Homeworks%20CI/badge.svg)
+[![Scala CI](https://github.com/pintset/scala-bootcamp-homeworks/actions/workflows/bootcamp.yml/badge.svg)](https://github.com/pintset/scala-bootcamp-homeworks/actions/workflows/bootcamp.yml)
 
 ## Structure
 
