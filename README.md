@@ -19,7 +19,7 @@ In case a task is written as script(s), you will see `fsx` files which you can r
 
 Here is video example which shows both of those options: https://youtu.be/AyCYXAOFoto
 
-When task is implemented as a project, then [TODO]
+When task is implemented as a project, then [ TODO ]
 
 If you have any questions about how to use REPL, or have problems with .net/vscode/ionide installation - let me know.
 
