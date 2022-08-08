@@ -1,4 +1,4 @@
-name: Scala Bootcamp Homeworks CI
+name: Scala CI
 
 on:
   push:
