@@ -1,5 +1,4 @@
 import scala.annotation.nowarn
-
 import org.scalatest.EitherValues
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
