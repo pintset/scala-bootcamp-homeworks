@@ -51,12 +51,12 @@ jobs:
 
       - id: run_tests
         name: Run tests
-        working-directory: ./$PROJECT_NAME/scala
+        working-directory: ${PROJECT_NAME}/scala
         run: sbt coverage test
 
       - id: create_coverage_report
         name: Create coverage report
-        working-directory: ./$PROJECT_NAME/scala
+        working-directory: ${PROJECT_NAME}/scala
         run: sbt coverageReport
 
       - id: upload_coverage_report
