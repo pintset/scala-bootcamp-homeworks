@@ -7,7 +7,7 @@ ThisBuild / organizationName := "example"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "homework11",
+    name := "unittesting",
     libraryDependencies ++= Seq(
       scalaTest % Test,
       "org.scalacheck" %% "scalacheck" % "1.14.1" % "test"
