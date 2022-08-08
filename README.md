@@ -2,6 +2,8 @@
 
 This repo contains homeworks for Scala Bootcamp 2021
 
+![Scala CI](https://github.com/pintset/scala-bootcamp-homework/workflows/Scala%20Bootcamp%20Homeworks%20CI/badge.svg)
+
 ## Structure
 
 Each homework is numbered (`01`, `02` etc.). Inside the numbered folder you can find two folders: `fsharp` and `scala`. The former contains implementation of a task written with F# 5 and the latter - with Scala.

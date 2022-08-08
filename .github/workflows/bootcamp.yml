@@ -47,13 +47,13 @@ jobs:
         if: "${{ steps.read_projects.outputs.project_name != '' }}"
         run: sbt coverage test
 
-      - id: create_coverage_report
-        name: Create coverage report
-        working-directory: ${{ steps.read_projects.outputs.project_name }}/scala
-        if: "${{ steps.read_projects.outputs.project_name != '' }}"
-        run: sbt coverageReport
+      # - id: create_coverage_report
+      #   name: Create coverage report
+      #   working-directory: ${{ steps.read_projects.outputs.project_name }}/scala
+      #   if: "${{ steps.read_projects.outputs.project_name != '' }}"
+      #   run: sbt coverageReport
 
-      - id: upload_coverage_report
-        name: Upload coverage report to Codecov
-        if: "${{ steps.read_projects.outputs.project_name != '' }}"
-        uses: codecov/codecov-action@v1
+      # - id: upload_coverage_report
+      #   name: Upload coverage report to Codecov
+      #   if: "${{ steps.read_projects.outputs.project_name != '' }}"
+      #   uses: codecov/codecov-action@v1
