@@ -46,17 +46,17 @@ jobs:
       - id: eval_project_name
         name: Evaluate project name
         run: |
-          # echo ${{steps.read_projects.outputs.output1}}
+          # echo ${{steps.read_projects.outputs.output1 }}
           echo $PROJECT_NAME
 
       - id: run_tests
         name: Run tests
-        working-directory: ${{steps.read_projects.outputs.output1}}/scala
+        working-directory: ${{ env.PROJECT_NAME }}/scala
         run: sbt coverage test
 
       - id: create_coverage_report
         name: Create coverage report
-        working-directory: ${{steps.read_projects.outputs.output1}}/scala
+        working-directory: ${{ env.PROJECT_NAME }}/scala
         run: sbt coverageReport
 
       - id: upload_coverage_report
