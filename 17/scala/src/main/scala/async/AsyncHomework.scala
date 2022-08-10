@@ -43,7 +43,7 @@ object AsyncHomework extends App {
 
 //  val args2 = Array(
 //    "https://google.com", "https://microsoft.com", "https://yandex.ru", "https://amazon.com", "https://github.com")
-  args2.map(url => (url, pipeline(url))).foreach { case (url, f) => f.onComplete(print(url, _)) }
+  args.map(url => (url, pipeline(url))).foreach { case (url, f) => f.onComplete(print(url, _)) }
 
   private def fetchPageBody(url: String): Future[String] = {
     println(f"Fetching $url")
