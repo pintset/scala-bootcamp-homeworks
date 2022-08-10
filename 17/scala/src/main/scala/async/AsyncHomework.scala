@@ -2,9 +2,9 @@ package async
 
 import java.net.URL
 import java.util.concurrent.Executors
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
+import scala.util.Try
 
 /**
  * Application:
@@ -22,22 +22,28 @@ object AsyncHomework extends App {
   // Waits 60 seconds because of newCachedThreadPool
   private implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-//  val url = "http://google.com"
-//
-//    val serverNames = for {
-//      body <- fetchPageBody(url)
-//      urls <- findLinkUrls(body)
-//      serverNames <- Future.traverse(urls)(fetchServerName)
-//    } yield serverNames
-//
-//    serverNames.map(_.sorted.flatten.distinct.foreach(println))
+  def pipeline(url: String): Future[List[String]] =
+    fetchPageBody(url)
+      .flatMap(findLinkUrls)
+      .flatMap(Future.traverse(_)(fetchServerName))
+      .map(_.flatten.distinct.sorted)
 
-  // run http://google.com
-  
-  fetchPageBody(args(0))
-    .flatMap(findLinkUrls)
-    .flatMap(Future.traverse(_)(fetchServerName))
-    .map(_.sorted.flatten.distinct.foreach(println))
+  def print(url: String, result: Try[List[String]]): Unit = {
+    val names = {
+      result.fold(t => s"Fetching failed: ${t.getMessage}", {
+        case List() => "None"
+        case xs => xs.mkString(", ")
+      })
+    }
+
+    synchronized {
+      println(s"Server names for $url: $names")
+    }
+  }
+
+//  val args2 = Array(
+//    "https://google.com", "https://microsoft.com", "https://yandex.ru", "https://amazon.com", "https://github.com")
+  args2.map(url => (url, pipeline(url))).foreach { case (url, f) => f.onComplete(print(url, _)) }
 
   private def fetchPageBody(url: String): Future[String] = {
     println(f"Fetching $url")
