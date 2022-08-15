@@ -23,26 +23,26 @@ class SharedStateHomeworkSpec extends AsyncFreeSpec with AsyncIOSpec with Matche
   }
 
   "Value is in cache when exp time and check time are not in sync != 0" in
-    cacheHasValue(expiresIn = 100.milliseconds, checkOnExpirationEvery = 70.milliseconds, sleep = 120.milliseconds)
+    cacheHasValue(expiresIn = 4.seconds, checkOnExpirationEvery = 3.seconds, sleep = 5.seconds)
       .asserting(_ shouldBe true)
 
   "Value removed from cache after expiration" in
-    cacheHasValue(expiresIn = 100.milliseconds, checkOnExpirationEvery = 50.milliseconds, sleep = 120.milliseconds)
+    cacheHasValue(expiresIn = 4.seconds, checkOnExpirationEvery = 3.seconds, sleep = 7.seconds)
       .asserting(_ shouldBe false)
 
   "Expiration is renewed for new value for the same key" in {
     val io =
       for {
-        cache <- Cache.of[IO, Int, Int](100.milliseconds, 70.milliseconds)
+        cache <- Cache.of[IO, Int, Int](5.seconds, 3.seconds)
         _ <- cache.put(1, 1)
-        _ <- IO.sleep(120.milliseconds)
+        _ <- IO.sleep(4.seconds)
         r <- cache.get(1)
         _ <- IO(assert(r == Option(1)))
         _ <- cache.put(1, 1)
-        _ <- IO.sleep(80.milliseconds)
+        _ <- IO.sleep(4.seconds)
         r <- cache.get(1)
         _ <- IO(assert(r == Option(1)))
-        _ <- IO.sleep(70.milliseconds)
+        _ <- IO.sleep(3.seconds)
         r <- cache.get(1)
         _ <- IO(assert(r.isEmpty))
       } yield ()
