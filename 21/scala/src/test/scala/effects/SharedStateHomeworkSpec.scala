@@ -42,7 +42,7 @@ class SharedStateHomeworkSpec extends AsyncFreeSpec with AsyncIOSpec with Matche
         _ <- IO.sleep(80.milliseconds)
         r <- cache.get(1)
         _ <- IO(assert(r == Option(1)))
-        _ <- IO.sleep(50.milliseconds)
+        _ <- IO.sleep(70.milliseconds)
         r <- cache.get(1)
         _ <- IO(assert(r.isEmpty))
       } yield ()
