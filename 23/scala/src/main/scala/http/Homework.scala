@@ -44,6 +44,7 @@ object GuessServer extends IOApp {
               (games + (guess.id -> newGame), newGame)
           }
         }
+
         response <- gameOpt.map { game =>
           val result: GameResult =
             if (guess.number == game.number) YouWon
