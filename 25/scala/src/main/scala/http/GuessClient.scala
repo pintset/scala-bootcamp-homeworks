@@ -31,42 +31,60 @@ object GuessClient extends IOApp.Simple {
 
   // Технически, getNextValue + guess - это и есть move
   // Выходит, что всё что надо сделать - это разбить botMove
-  def gameLoop[F[_] : Monad](getNextValue: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult]): F[AttemptResult] = {
+  final case class Game[F[_]](getNextValue: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult])
+
+  def gameLoop[F[_] : Monad](game: Game[F]): F[AttemptResult] = {
     def loop(attemptResultOpt: Option[AttemptResult]): F[AttemptResult] =
-      getNextValue(attemptResultOpt) >>= guess >>= { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+      game.getNextValue(attemptResultOpt) >>=
+        game.guess >>=
+        { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
 
     loop(None)
   }
 
-  def consoleGameLoop[F[_]: Sync](gameLoop: (Option[AttemptResult] => F[Int], Int => F[AttemptResult]) => F[AttemptResult]) = {
-    def consoleGameLoop(getNextValue: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult]): F[AttemptResult] = {
-      def newGetNextValue(attemptResultOpt: Option[AttemptResult]) =
-        // Нужно только заврапать getNextValue - т.е. это тоже цепочка
-        // Можно доработать не guess, а getNextValue
-        Console[F].putStr("Enter your guess: ") >> getNextValue(attemptResultOpt)
+  // Можно ещё вместо этого сделать консоль game, и передать его в gameLoop. Тогда не нужен будет consoleGameLoop
+  def toConsoleGame[F[_]: Sync](game: Game[F]): Game[F] = {
+    val getNextValue =
+      { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> game.getNextValue
 
-      val show = common.domain.gameResultShow.show _
-      val newGuess = guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+    val show = common.domain.gameResultShow.show _
+    val guess =
+      game.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
 
-      gameLoop(newGetNextValue, newGuess)
-    }
-
-    consoleGameLoop _
+    Game(getNextValue, guess)
   }
+
+//  def consoleGameLoop[F[_]: Sync](gameLoop: Game[F] => F[AttemptResult]): Game[F] => F[AttemptResult] = {
+//    def consoleGameLoop(game: Game[F]): F[AttemptResult] = {
+//      def newGetNextValue(attemptResultOpt: Option[AttemptResult]) =
+//        // Нужно только заврапать getNextValue - т.е. это тоже цепочка
+//        // Можно доработать не guess, а getNextValue
+//        Console[F].putStr("Enter your guess: ") >> game.getNextValue(attemptResultOpt)
+//
+//      val show = common.domain.gameResultShow.show _
+//      val newGuess = game.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+//
+//      gameLoop(Game(newGetNextValue, newGuess))
+//    }
+//
+//    consoleGameLoop
+//  }
 
   // TODO: Вернуть здесь монаду и сделать по-нормальному
   // def botGame[F[_]: Monad](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
   // min, max заменить на сеттингс? // Таже самая игра получилась :))
   // def botGame[F[_]: Sync](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
   def botGame[F[_]: Sync](settings: NewGame)(client: common.Client[F]): F[AttemptResult] = {
+    // F ~> G or FunctionK[F, G] where G[A] = StateT[F, MinMax, A]
+    def passThrough[A] = StateT.liftF[F, MinMax, A] _
 
-    // F ~> G or FunctionK[F, G]
-    def passThrough[A](fa: F[A]): StateT[F, MinMax, A] =
-      StateT { s: MinMax =>
-        fa.map(a => (s, a))
-      }
+//    def passThrough[A](fa: F[A]): StateT[F, MinMax, A] = {
+//      StateT { s: MinMax =>
+//        fa.map(a => (s, a))
+//      }
+//    }
 
-//    val passThrough: F ~> G = new FunctionK[F, G] {
+    //    val passThrough: F ~> G = new FunctionK[F, G] {
 //      def apply[A](fa: F[A]): G[A] = StateT { s =>
 //        fa.map(a => (s, a))
 //      }
@@ -77,18 +95,19 @@ object GuessClient extends IOApp.Simple {
     val guessG = client.guess _ andThen passThrough
 
     // Тогда нужно принимать gameLoop как параметр :(
-    val newGameLoop = consoleGameLoop(gameLoop[StateT[F, MinMax, *]])
-    newGameLoop(getNext, guessG).runA(MinMax(settings.min, settings.max))
+    // val newGameLoop = consoleGameLoop(gameLoop[StateT[F, MinMax, *]])
+    val game = toConsoleGame(Game(getNext, guessG))
+    gameLoop(game).runA(MinMax(settings.min, settings.max))
   }
 
   def consoleGame[F[_]: Sync](settings: NewGame)(client: common.Client[F]): F[AttemptResult] = {
-    val newGameLoop = consoleGameLoop(gameLoop[F])
-    newGameLoop(common.ConsoleStrategy.apply.getNext, client.guess)
+    val game = toConsoleGame(Game(common.ConsoleStrategy.apply.getNext, client.guess))
+    gameLoop(game)
   }
 
   def genProgram[F[_] : Concurrent](client: org.http4s.client.Client[F], host: Uri, settingsService: SettingsService[F],  game: NewGame => common.Client[F] => F[AttemptResult]) = {
     settingsService.getSettings >>= { settings =>
-      // Это можно всё в функциях оставить
+      // Это можно всё в функциях оставить. Можно совместить две функции без сеттингов, и потом передать одинаковый параметр
       http.Client(client, host, settings) >>= game(settings)
     }
   }
@@ -102,17 +121,6 @@ object GuessClient extends IOApp.Simple {
     // type G[A] = StateT[IO, GameState, A]
 
     BlazeClientBuilder[IO](ExecutionContext.global).resource.use { client =>
-      // consoleProgram(Logger(logHeaders = false, logBody = true)(client), uri"http://localhost:9001")
-
-      // consoleProgram[IO](startReqMemoized[IO](client, uri"http://localhost:9001"), SettingsService.console[IO], consoleBot[IO])
-
-      // val guessGameF: G[Int => IO[AttemptResult]] = passThrough(startReqMemoized[IO](client, uri"http://localhost:9001"))
-      // consoleProgram[G](guessGameF, SettingsService.console[IO], consoleBot[IO])
-
-      // botProgram(startReqMemoized[IO](client, uri"http://localhost:9001"), SettingsService.console[IO], botBot[IO])
-
-      // consoleProgram2(client, uri"http://localhost:9001", SettingsService.console[IO])
-
       // Вот здесь genProgram можно сделать из двух функций. Первая принимает первые одинаковые параметры, вторая
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])

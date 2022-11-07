@@ -13,6 +13,8 @@ import common.Client
 import common.domain.GameId.decoder
 import common.domain.AttemptResult.codec
 
+// (Int => F[AttemptResult]) = Client[F]
+
 object Client {
   def apply[F[_]: Concurrent](client: org.http4s.client.Client[F], host: Uri, settings: NewGame): F[Client[F]] = {
     val dsl = new Http4sClientDsl[F] {}

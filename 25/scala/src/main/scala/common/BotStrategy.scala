@@ -7,24 +7,23 @@ import common.domain.{AttemptResult, Greater, Lower}
 object BotStrategy {
   final case class MinMax(min: Int, max: Int)
 
-  def apply[F[_]: Monad]: GameStrategy[StateT[F, MinMax, *]] = {
-    new GameStrategy[StateT[F, MinMax, *]] {
-      def getNext(prevAttemptResultOpt: Option[AttemptResult]): StateT[F, MinMax, Int] = {
-        def strategy(min: Int, max: Int): Int = min + (max - min) / 2
+  def apply[F[_]: Monad]: GameStrategy[StateT[F, MinMax, *]] = prevAttemptResultOpt => {
+    def strategy(v: MinMax): Int = v.min + (v.max - v.min) / 2
 
-        def nextPair(prevMin: Int, prevMax: Int, prevAttemptResultOpt: Option[AttemptResult]): (Int, Int) =
-          prevAttemptResultOpt.map {
-            case Greater(_) => (prevMin, strategy(prevMin, prevMax))
-            case Lower(_) => (strategy(prevMin, prevMax), prevMax)
-            case _ => (prevMin, prevMax)
-          }.getOrElse((prevMin, prevMax))
+    // Fold?
+    // Strategy prev вычисляется всегда?
+    // nextState - реально фолд. Гейм луп потенциально тоже фолд, кстати - там же стейт передаётся :)
+    def nextMinMax(prev: MinMax, prevAttemptResultOpt: Option[AttemptResult]): MinMax =
+      prevAttemptResultOpt.map {
+        case Greater(_) => MinMax(prev.min, strategy(prev))
+        case Lower(_) => MinMax(strategy(prev), prev.max)
+        case _ => prev
+      }.getOrElse(prev)
 
-        StateT { (s: MinMax) =>
-          val nextMinMax: (Int, Int) = nextPair(s.min, s.max, prevAttemptResultOpt)
-          val nextGuess: Int = strategy(nextMinMax._1, nextMinMax._2)
-          Monad[F].pure((MinMax(nextMinMax._1, nextMinMax._2), nextGuess))
-        }
-      }
+    StateT { prevMinMax =>
+      val minMax = nextMinMax(prevMinMax, prevAttemptResultOpt)
+      val nextGuess: Int = strategy(minMax)
+      Monad[F].pure(minMax, nextGuess)
     }
   }
 }
