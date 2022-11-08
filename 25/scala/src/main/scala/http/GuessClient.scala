@@ -1,6 +1,6 @@
 package http
 
-import cats.data.{Reader, ReaderT, StateT}
+import cats.data.{Kleisli, Reader, ReaderT, StateT}
 import cats.{Monad, ~>}
 import cats.arrow.FunctionK
 import cats.effect.{Concurrent, IO, IOApp, Sync}
@@ -113,9 +113,27 @@ object GuessClient extends IOApp.Simple {
 
       // это просто что-то что принимает settings, и это что-то хочется объединить вместе. А потом просто подсунуть
       // и написать: settingsService >>= "это что-то"
+
       getClient(settings) >>= game(settings)
     }
   }
+
+  def genProgram2[F[_] : Concurrent](getClient: F[Client[F]], game: common.Client[F] => F[AttemptResult]): F[AttemptResult] =
+    getClient >>= game
+
+  // Create Game. Получается что я на основании сеттинов здесь уже создаю всю игру целиком. Т.е. получаю клиент, и уже его
+  // оборачиваю
+  // Нужно просто вернуть монадки из функций производителей.
+  def genProgram3[F[_]: Monad](getClient: NewGame => F[Client[F]], game: common.Client[F] => NewGame => F[AttemptResult]) = {
+    type G[A] = ReaderT[F, NewGame, A]
+    val newGetClient: G[Client[F]] = ReaderT(getClient)
+    val newGame: Client[F] => G[AttemptResult] = { clientF => ReaderT(game(clientF)) }
+
+    newGetClient.flatMap(newGame).run
+
+    ReaderT(getClient).flatMap(clientF => ReaderT(game(clientF))).run
+  }
+
 
   def run: IO[Unit] = {
     // TODO: Console is being recreated multiple times (everytime it is being accessed)
