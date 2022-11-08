@@ -1,6 +1,6 @@
 package http
 
-import cats.data.StateT
+import cats.data.{Reader, ReaderT, StateT}
 import cats.{Monad, ~>}
 import cats.arrow.FunctionK
 import cats.effect.{Concurrent, IO, IOApp, Sync}
@@ -18,6 +18,7 @@ import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import common.BotStrategy.MinMax
+import common.Client
 
 import scala.concurrent.ExecutionContext
 import common.domain.GameId.decoder
@@ -105,10 +106,14 @@ object GuessClient extends IOApp.Simple {
     gameLoop(game)
   }
 
-  def genProgram[F[_] : Concurrent](client: org.http4s.client.Client[F], host: Uri, settingsService: SettingsService[F],  game: NewGame => common.Client[F] => F[AttemptResult]) = {
+  def genProgram[F[_] : Concurrent](settingsService: SettingsService[F],  getClient: NewGame => F[Client[F]], game: NewGame => common.Client[F] => F[AttemptResult]) = {
     settingsService.getSettings >>= { settings =>
       // Это можно всё в функциях оставить. Можно совместить две функции без сеттингов, и потом передать одинаковый параметр
-      http.Client(client, host, settings) >>= game(settings)
+      // ReaderT ??? (NewSettings)
+
+      // это просто что-то что принимает settings, и это что-то хочется объединить вместе. А потом просто подсунуть
+      // и написать: settingsService >>= "это что-то"
+      getClient(settings) >>= game(settings)
     }
   }
 
@@ -117,14 +122,13 @@ object GuessClient extends IOApp.Simple {
     // implicit val console = Console[IO]
 
     // import org.http4s.client.middleware.Logger
-
-    // type G[A] = StateT[IO, GameState, A]
-
-    BlazeClientBuilder[IO](ExecutionContext.global).resource.use { client =>
+    // тут потенциально может захотеться менять клиента не таким образом. А задавать хост с портом,
+    // а потом указывать тип клиента - как-то так
+    http.Client.resource[IO](uri"http://localhost:9001").use { client =>
       // Вот здесь genProgram можно сделать из двух функций. Первая принимает первые одинаковые параметры, вторая
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])
-      genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], botGame[IO])
+      genProgram(SettingsService.console[IO], client, botGame[IO])
     }.void
   }
 }
