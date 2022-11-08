@@ -1,5 +1,6 @@
 package http
 
+import cats.data.ReaderT
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource}
 import org.http4s.Uri
 import org.http4s.client.dsl.Http4sClientDsl
@@ -35,6 +36,6 @@ object Client {
         }
   }
 
-  def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
-    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => apply[F](client, host) }
+  def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, ReaderT[F, NewGame, Client[F]]] =
+    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => ReaderT(apply[F](client, host)) }
 }

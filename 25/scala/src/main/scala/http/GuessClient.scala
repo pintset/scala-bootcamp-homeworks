@@ -75,7 +75,7 @@ object GuessClient extends IOApp.Simple {
   // def botGame[F[_]: Monad](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
   // min, max заменить на сеттингс? // Таже самая игра получилась :))
   // def botGame[F[_]: Sync](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
-  def botGame[F[_]: Sync](settings: NewGame)(client: common.Client[F]): F[AttemptResult] = {
+  def botGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
     // F ~> G or FunctionK[F, G] where G[A] = StateT[F, MinMax, A]
     def passThrough[A] = StateT.liftF[F, MinMax, A] _
 
@@ -98,7 +98,8 @@ object GuessClient extends IOApp.Simple {
     // Тогда нужно принимать gameLoop как параметр :(
     // val newGameLoop = consoleGameLoop(gameLoop[StateT[F, MinMax, *]])
     val game = toConsoleGame(Game(getNext, guessG))
-    gameLoop(game).runA(MinMax(settings.min, settings.max))
+
+    ReaderT { settings => gameLoop(game).runA(MinMax(settings.min, settings.max)) }
   }
 
   def consoleGame[F[_]: Sync](settings: NewGame)(client: common.Client[F]): F[AttemptResult] = {
@@ -134,6 +135,8 @@ object GuessClient extends IOApp.Simple {
     ReaderT(getClient).flatMap(clientF => ReaderT(game(clientF))).run
   }
 
+  def genProgram4[F[_]: Monad](settingsService: SettingsService[F], clientF: ReaderT[F, NewGame, Client[F]], game: common.Client[F] => ReaderT[F, NewGame, AttemptResult]) =
+    settingsService.getSettings >>= clientF.flatMap(game).run
 
   def run: IO[Unit] = {
     // TODO: Console is being recreated multiple times (everytime it is being accessed)
@@ -146,7 +149,8 @@ object GuessClient extends IOApp.Simple {
       // Вот здесь genProgram можно сделать из двух функций. Первая принимает первые одинаковые параметры, вторая
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])
-      genProgram(SettingsService.console[IO], client, botGame[IO])
+      // genProgram(SettingsService.console[IO], client, botGame[IO])
+      genProgram4(SettingsService.console[IO], client, botGame[IO])
     }.void
   }
 }
