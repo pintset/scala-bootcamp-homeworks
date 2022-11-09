@@ -18,7 +18,7 @@ import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import common.BotStrategy.MinMax
-import common.Client
+import common.{BotStrategy, Client, ConsoleStrategy, GameStrategy}
 
 import scala.concurrent.ExecutionContext
 import common.domain.GameId.decoder
@@ -75,7 +75,7 @@ object GuessClient extends IOApp.Simple {
   // def botGame[F[_]: Monad](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
   // min, max заменить на сеттингс? // Таже самая игра получилась :))
   // def botGame[F[_]: Sync](min: Int, max: Int)(guess: Int => F[AttemptResult]): F[AttemptResult] = {
-  def botGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
+  def botGame[F[_]: Sync](guess: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
     // F ~> G or FunctionK[F, G] where G[A] = StateT[F, MinMax, A]
     def passThrough[A] = StateT.liftF[F, MinMax, A] _
 
@@ -92,8 +92,8 @@ object GuessClient extends IOApp.Simple {
 //    }
 
     val printNext = { (number: Int) => Console[F].putStrLn(number.toString).as(number) } andThen passThrough
-    val getNext: Option[AttemptResult] => StateT[F, MinMax, Int] = common.BotStrategy.apply.getNext _ >=> printNext
-    val guessG = client.guess _ andThen passThrough
+    val getNext: Option[AttemptResult] => StateT[F, MinMax, Int] = common.BotStrategy.apply >=> printNext
+    val guessG = guess andThen passThrough
 
     // Тогда нужно принимать gameLoop как параметр :(
     // val newGameLoop = consoleGameLoop(gameLoop[StateT[F, MinMax, *]])
@@ -103,7 +103,7 @@ object GuessClient extends IOApp.Simple {
   }
 
   def consoleGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
-    val game = toConsoleGame(Game(common.ConsoleStrategy.apply.getNext, client.guess))
+    val game = toConsoleGame(Game(common.ConsoleStrategy.apply, client))
     ReaderT.liftF(gameLoop(game))
   }
 
@@ -119,8 +119,21 @@ object GuessClient extends IOApp.Simple {
     }
   }
 
-  def genProgram2[F[_]: Monad](getClient: F[Client[F]], game: common.Client[F] => F[AttemptResult]): F[AttemptResult] =
+  def genProgram2[F[_]: Monad](getClient: F[Client[F]], game: common.Client[F] => F[AttemptResult]): F[AttemptResult] = {
+    // getClient возвращает guess. Теперь мне надо написать generic игру. А generic игра - это гейм луп
     getClient >>= game
+  }
+
+  // А клиента со стратегией можно сделать консольными до подачи сюда
+  // Теперь достаточно передать туда монады - и всё заработать должно
+  def genProgram22[F[_] : Monad](guessF: F[Int => F[AttemptResult]], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
+    guessF >>= { guess =>
+      def loop: Option[AttemptResult] => F[AttemptResult] =
+        getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+
+      loop(Option.empty)
+    }
+  }
 
   // Create Game. Получается что я на основании сеттинов здесь уже создаю всю игру целиком. Т.е. получаю клиент, и уже его
   // оборачиваю
@@ -138,6 +151,9 @@ object GuessClient extends IOApp.Simple {
   def genProgram4[F[_]: Monad](settingsService: SettingsService[F], clientF: ReaderT[F, NewGame, Client[F]], game: common.Client[F] => ReaderT[F, NewGame, AttemptResult]) =
     settingsService.getSettings >>= clientF.flatMap(game).run
 
+  def genProgram44[F[_] : Monad](settingsService: SettingsService[F], game: NewGame => F[AttemptResult]) =
+    settingsService.getSettings >>= game
+
   def run: IO[Unit] = {
     // TODO: Console is being recreated multiple times (everytime it is being accessed)
     // implicit val console = Console[IO]
@@ -150,8 +166,44 @@ object GuessClient extends IOApp.Simple {
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])
       // genProgram(SettingsService.console[IO], client, botGame[IO])
-      genProgram4(SettingsService.console[IO], client, consoleGame[IO])
-      //genProgram4(SettingsService.console[IO], client, botGame[IO])
+      // genProgram4(SettingsService.console[IO], client, consoleGame[IO])
+      // genProgram4(SettingsService.console[IO], client, botGame[IO])
+
+      // TODO: Сделать консольный принтинг для этой версии
+
+      // Console
+      type G[A] = Kleisli[IO, NewGame, A]
+      val guessG: G[Client[G]] = client.map { guess => guess andThen Kleisli.liftF[IO, NewGame, AttemptResult] }
+      val getNextG: GameStrategy[G] = ConsoleStrategy.apply[IO] _ andThen Kleisli.liftF[IO, NewGame, Int]
+
+      // generic game
+      val genGame = genProgram22(guessG, getNextG).run
+      genProgram44(SettingsService.console[IO], genGame)
+
+      // Bot 1
+//      type H[A] = StateT[IO, MinMax, A]
+//      type I[A] = Kleisli[H, NewGame, A]
+//      val guessH: G[Int => I[AttemptResult]] =
+//        client.map { guess => guess _ andThen StateT.liftF[IO, MinMax, AttemptResult] andThen Kleisli.liftF[H, NewGame, AttemptResult] }
+//
+//      val getNextI: Option[AttemptResult] => I[Int] = BotStrategy.apply[IO] andThen Kleisli.liftF[H, NewGame, Int]
+
+      // Bot 2
+//       val guessH: Kleisli[IO, NewGame, Int => IO[AttemptResult]] = client
+      //val getNext: GameStrategy[StateT[IO, MinMax, *]] = BotStrategy.apply[IO]
+      // Первый стейт у меня содержится внутри NewGame - там содержатся первые min и max
+      // Фактически мне хвост StateT нужно превратить как-то в Кleisli
+
+      val getNext: Option[AttemptResult] => StateT[IO, MinMax, Int] = BotStrategy.apply[IO]
+      val getNextGBot: GameStrategy[G] = attemptResultOpt =>
+        Kleisli.apply[IO, NewGame, Int] { settings =>
+          val test = getNext andThen { x => x.runA(MinMax(settings.min, settings.max)) }
+          test(attemptResultOpt)
+      }
+
+      val genGameB = genProgram22(guessG, getNextGBot).run
+      genProgram44(SettingsService.console[IO], genGameB)
+
     }.void
   }
 }

@@ -1,6 +1,6 @@
 package http
 
-import cats.data.ReaderT
+import cats.data.Kleisli
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource}
 import org.http4s.Uri
 import org.http4s.client.dsl.Http4sClientDsl
@@ -32,10 +32,10 @@ object Client {
 
         // gameIdF - startRequest. Creating game with gameId
         .map { gameIdF =>
-          number => gameIdF >>= { gameId => Method.POST(Guess(gameId, number), host / "guess") >>= client.expect[AttemptResult] }
+          (number: Int) => gameIdF >>= { gameId => Method.POST(Guess(gameId, number), host / "guess") >>= client.expect[AttemptResult] }
         }
   }
 
-  def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, ReaderT[F, NewGame, Client[F]]] =
-    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => ReaderT(apply[F](client, host)) }
+  def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, Kleisli[F, NewGame, Client[F]]] =
+    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => Kleisli(apply[F](client, host)) }
 }
