@@ -44,6 +44,17 @@ object GuessClient extends IOApp.Simple {
   }
 
   // Можно ещё вместо этого сделать консоль game, и передать его в gameLoop. Тогда не нужен будет consoleGameLoop
+
+  def decoratedGetNext[F[_]: Sync](getNext: GameStrategy[F]): GameStrategy[F] =
+    { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> getNext
+
+  def decoratedGuess[F[_]: Sync](guess: Client[F]): Client[F] = {
+    val show = common.domain.gameResultShow.show _
+    guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+  }
+
+  def printNext[F[_]: Sync]: Int => F[Int] = { (number: Int) => Console[F].putStrLn(number.toString).as(number) }
+
   def toConsoleGame[F[_]: Sync](game: Game[F]): Game[F] = {
     val getNextValue =
       { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> game.getNextValue
@@ -175,33 +186,22 @@ object GuessClient extends IOApp.Simple {
       type G[A] = Kleisli[IO, NewGame, A]
       val guessG: G[Client[G]] = client.map { guess => guess andThen Kleisli.liftF[IO, NewGame, AttemptResult] }
       val getNextG: GameStrategy[G] = ConsoleStrategy.apply[IO] _ andThen Kleisli.liftF[IO, NewGame, Int]
+      val guessGDecorated: G[Client[G]] = guessG.map(guess => decoratedGuess(guess))
 
       // generic game
-      val genGame = genProgram22(guessG, getNextG).run
+      val genGame = genProgram22(guessGDecorated, getNextG).run
       genProgram44(SettingsService.console[IO], genGame)
 
-      // Bot 1
-//      type H[A] = StateT[IO, MinMax, A]
-//      type I[A] = Kleisli[H, NewGame, A]
-//      val guessH: G[Int => I[AttemptResult]] =
-//        client.map { guess => guess _ andThen StateT.liftF[IO, MinMax, AttemptResult] andThen Kleisli.liftF[H, NewGame, AttemptResult] }
-//
-//      val getNextI: Option[AttemptResult] => I[Int] = BotStrategy.apply[IO] andThen Kleisli.liftF[H, NewGame, Int]
-
-      // Bot 2
-//       val guessH: Kleisli[IO, NewGame, Int => IO[AttemptResult]] = client
-      //val getNext: GameStrategy[StateT[IO, MinMax, *]] = BotStrategy.apply[IO]
-      // Первый стейт у меня содержится внутри NewGame - там содержатся первые min и max
-      // Фактически мне хвост StateT нужно превратить как-то в Кleisli
-
-      val getNext: Option[AttemptResult] => StateT[IO, MinMax, Int] = BotStrategy.apply[IO]
+      // Bot
       val getNextGBot: GameStrategy[G] = attemptResultOpt =>
         Kleisli.apply[IO, NewGame, Int] { settings =>
-          val test = getNext andThen { x => x.runA(MinMax(settings.min, settings.max)) }
-          test(attemptResultOpt)
+          val getNext = BotStrategy.apply[IO] andThen { x => x.runA(MinMax(settings.min, settings.max)) }
+          getNext(attemptResultOpt)
       }
 
-      val genGameB = genProgram22(guessG, getNextGBot).run
+      val getNextGBotDecorated: GameStrategy[G] = decoratedGetNext(getNextGBot) >=> { number => Console[G].putStrLn(number.toString).as(number) }
+
+      val genGameB = genProgram22(guessGDecorated, getNextGBotDecorated).run
       genProgram44(SettingsService.console[IO], genGameB)
 
     }.void
