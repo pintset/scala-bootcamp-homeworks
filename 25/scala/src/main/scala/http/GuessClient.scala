@@ -102,9 +102,9 @@ object GuessClient extends IOApp.Simple {
     ReaderT { settings => gameLoop(game).runA(MinMax(settings.min, settings.max)) }
   }
 
-  def consoleGame[F[_]: Sync](settings: NewGame)(client: common.Client[F]): F[AttemptResult] = {
+  def consoleGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
     val game = toConsoleGame(Game(common.ConsoleStrategy.apply.getNext, client.guess))
-    gameLoop(game)
+    ReaderT.liftF(gameLoop(game))
   }
 
   def genProgram[F[_] : Concurrent](settingsService: SettingsService[F],  getClient: NewGame => F[Client[F]], game: NewGame => common.Client[F] => F[AttemptResult]) = {
@@ -119,7 +119,7 @@ object GuessClient extends IOApp.Simple {
     }
   }
 
-  def genProgram2[F[_] : Concurrent](getClient: F[Client[F]], game: common.Client[F] => F[AttemptResult]): F[AttemptResult] =
+  def genProgram2[F[_]: Monad](getClient: F[Client[F]], game: common.Client[F] => F[AttemptResult]): F[AttemptResult] =
     getClient >>= game
 
   // Create Game. Получается что я на основании сеттинов здесь уже создаю всю игру целиком. Т.е. получаю клиент, и уже его
@@ -150,7 +150,8 @@ object GuessClient extends IOApp.Simple {
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])
       // genProgram(SettingsService.console[IO], client, botGame[IO])
-      genProgram4(SettingsService.console[IO], client, botGame[IO])
+      genProgram4(SettingsService.console[IO], client, consoleGame[IO])
+      //genProgram4(SettingsService.console[IO], client, botGame[IO])
     }.void
   }
 }
