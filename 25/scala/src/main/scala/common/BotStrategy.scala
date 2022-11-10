@@ -18,7 +18,9 @@ object BotStrategy {
       }.getOrElse(prev)
 
     StateT
-      .inspect(strategy)
+      // Эта штука должна быть впереди потому что стратегия считает
+      // nextGuess для новой пары, а не для старой
       .modify(nextMinMax)
+      .inspect(strategy)
   }
 }

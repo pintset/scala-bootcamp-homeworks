@@ -2,6 +2,7 @@ package http
 
 import cats.data.Kleisli
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource}
+import cats.implicits.catsSyntaxFunction1FlatMap
 import org.http4s.Uri
 import org.http4s.client.dsl.Http4sClientDsl
 import common.domain.{AttemptResult, GameId, Guess, NewGame}
@@ -26,14 +27,53 @@ object Client {
     val dsl = new Http4sClientDsl[F] {}
     import dsl._
 
-    settings =>
-      Concurrent
-        .memoize(Method.POST(settings, host / "start") >>= client.expect[GameId])
+//    settings =>
+//      Concurrent
+//        .memoize(Method.POST(settings, host / "start") >>= client.expect[GameId])
+//
+//        // gameIdF - startRequest. Creating game with gameId
+//        .map { gameIdF =>
+//          number => gameIdF >>= { gameId => Method.POST(Guess(gameId, number), host / "guess") >>= client.expect[AttemptResult] }
+//        }
 
-        // gameIdF - startRequest. Creating game with gameId
+    def startRequest(settings: NewGame): F[Request[F]] = Method.POST(settings, host / "start")
+    def guessRequest(number: Int): GameId => F[Request[F]] = gameId => Method.POST(Guess(gameId, number), host / "guess")
+
+    implicit class ConcurrentOps[A](fa: F[A]) {
+      def memoize: F[F[A]] = Concurrent.memoize(fa)
+    }
+
+//    startRequest >=> client.expect[GameId] andThen Concurrent.memoize andThen { gameIdFF =>
+//      gameIdFF.map { gameIdF =>
+//        number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
+//      }
+//    }
+
+//    settings =>
+//      Concurrent
+//        .memoize(startRequest(settings) >>= client.expect[GameId])
+//        .map { gameIdF =>
+//          number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult] }
+//        }
+
+    // Потенциально эту штуку можно будет генерализировать, если передавать ей startRequest/guessRequest
+    // Только там и там вызов клиента будет фактически частьюп
+    settings =>
+      startRequest(settings)
+        .flatMap(client.expect[GameId])
+        .memoize
         .map { gameIdF =>
-          (number: Int) => gameIdF >>= { gameId => Method.POST(Guess(gameId, number), host / "guess") >>= client.expect[AttemptResult] }
+          number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
         }
+
+//    startRequest _
+//      .andThenF(client.expect[GameId])
+//      .andThen(Concurrent.memoize)
+//      .andThen { gameIdFF =>
+//        gameIdFF.map { gameIdF =>
+//          number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
+//        }
+//    }
   }
 
   def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, Kleisli[F, NewGame, Client[F]]] =
