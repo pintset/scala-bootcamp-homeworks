@@ -1,7 +1,7 @@
 package http
 
-import cats.data.{Kleisli, Reader, ReaderT, StateT}
-import cats.{Monad, ~>}
+import cats.data.{IndexedStateT, Kleisli, Reader, ReaderT, StateT}
+import cats.{Id, Monad, ~>}
 import cats.arrow.FunctionK
 import cats.effect.{Concurrent, IO, IOApp, Sync}
 import cats.implicits.catsSyntaxFunction1FlatMap
@@ -137,7 +137,7 @@ object GuessClient extends IOApp.Simple {
 
   // А клиента со стратегией можно сделать консольными до подачи сюда
   // Теперь достаточно передать туда монады - и всё заработать должно
-  def genProgram22[F[_] : Monad](guessF: F[Int => F[AttemptResult]], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
+  def genGame[F[_] : Monad](guessF: F[Int => F[AttemptResult]], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
     guessF >>= { guess =>
       def loop: Option[AttemptResult] => F[AttemptResult] =
         getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
@@ -172,7 +172,7 @@ object GuessClient extends IOApp.Simple {
     // import org.http4s.client.middleware.Logger
     // тут потенциально может захотеться менять клиента не таким образом. А задавать хост с портом,
     // а потом указывать тип клиента - как-то так
-    http.Client.resource[IO](uri"http://localhost:9001").use { client =>
+    http.Client.resource[IO](uri"http://localhost:9001").use { clientF =>
       // Вот здесь genProgram можно сделать из двух функций. Первая принимает первые одинаковые параметры, вторая
       // последний разный. Нужно попробовать исключить урл например. Урл нам нужен только для клиента
       // genProgram(client, uri"http://localhost:9001", SettingsService.console[IO], consoleGame[IO])
@@ -184,26 +184,83 @@ object GuessClient extends IOApp.Simple {
 
       // Console
       type G[A] = Kleisli[IO, NewGame, A]
-      val guessG: G[Client[G]] = client.map { guess => guess andThen Kleisli.liftF[IO, NewGame, AttemptResult] }
+      val guessG: G[Client[G]] = clientF.map { guess => guess andThen Kleisli.liftF[IO, NewGame, AttemptResult] }
       val getNextG: GameStrategy[G] = ConsoleStrategy.apply[IO] _ andThen Kleisli.liftF[IO, NewGame, Int]
       val guessGDecorated: G[Client[G]] = guessG.map(guess => decoratedGuess(guess))
 
       // generic game
-      val genGame = genProgram22(guessGDecorated, getNextG).run
-      genProgram44(SettingsService.console[IO], genGame)
+      val game = genGame(guessGDecorated, getNextG).run
+      genProgram44(SettingsService.console[IO], game)
 
       // Bot
+      // Т.е. в оригинале я получаю стейт монаду, и запускаю её сеттингами из Ридера, т.е. моё клеисли всё ещё внешнее
+      // по отношению к стейту (стейт внутри клеисли), но там я весь геймлуп запускаю с runA, а здесь нет
+      // Т.е. мне гейм нужно построить на стейте (genGame), а потом обернуть это в клеисли. Точне, у меня в клеисли
+      // должна быть завёрнута вся игра а не только стратегия
       val getNextGBot: GameStrategy[G] = attemptResultOpt =>
         Kleisli.apply[IO, NewGame, Int] { settings =>
+          // Здесь MinMax на каждой итерации должен передаваться разный
           val getNext = BotStrategy.apply[IO] andThen { x => x.runA(MinMax(settings.min, settings.max)) }
           getNext(attemptResultOpt)
       }
 
       val getNextGBotDecorated: GameStrategy[G] = decoratedGetNext(getNextGBot) >=> { number => Console[G].putStrLn(number.toString).as(number) }
 
-      val genGameB = genProgram22(guessGDecorated, getNextGBotDecorated).run
-      genProgram44(SettingsService.console[IO], genGameB)
+      val gameB = genGame(guessGDecorated, getNextGBotDecorated).run
+      genProgram44(SettingsService.console[IO], gameB)
 
+      // Bot 2
+      // В обоих случаях я просто создаю игру? Типа botGame, consoleGame. Как минимум в этом. Надо подумать
+      type H[A] = StateT[IO, MinMax, A]
+      val fK: IO ~> H = new FunctionK[IO, H] {
+        def apply[A](fa: IO[A]): H[A] =
+          StateT.liftF[IO, MinMax, A](fa)
+      }
+
+      type I[A] = Kleisli[H, NewGame, A]
+
+      // Мне надо описать game в рамках StateT, а потом сделать run для него и передавать в gen44
+      // Понятно что для выходного результата оно ничего не требует (т.е. мап внизу не обязателен)
+      // Если я найду способ объединить выход guessF с getNext - всё будет проще
+      // val guessF: Kleisli[H, NewGame, Int => H[AttemptResult]] =
+      //   clientF.mapK[H](fK).map(client => client andThen StateT.liftF[IO, MinMax, AttemptResult])
+
+      // Нужно помнить про то что MinMax у меня есть поднможество Settings. Может это поможет
+      // val getNext: Option[AttemptResult] => Kleisli[H, NewGame, Int] = BotStrategy.apply[IO] andThen Kleisli.liftF[H, NewGame, Int]
+
+      // getNext >=> guess - is move. Maybe can be used
+      // val test: Kleisli[IO, NewGame, Option[AttemptResult] => StateT[IO, MinMax, AttemptResult]] = guessF.map (guess => getNext >=> guess)
+
+      // val game = genGame(guessF, getNext)
+
+      // Значит клиент может зависеть только от изначальных сеттингов, он создаётся один раз. В принципе
+      // есть подозрение что не будет ничего страшного, если я буду передавать туда новый стейт - оно не должно
+      // пересоздаваться, т.к. луп гоняет ту штучку которая была создана изначально. Т.е. здесь два варианта реализации
+      // скорее всего.
+      // Внешка всё равно должна оставаться за Kleisli, потому что игра должна принять параметры, потом эти параметры
+      // должны сконвертиться в MinMax. Т.е. мне нужно чтобы принималось NewGame. Что можно ещё сделать?
+      // можно перевести всё в State[IO, NewGame, *]
+
+      type J[A] = StateT[IO, NewGame, A]
+
+      val kToS = new FunctionK[Kleisli[IO, NewGame, *], StateT[IO, NewGame, *]] {
+        def apply[A](fa: Kleisli[IO, NewGame, A]): StateT[IO, NewGame, A] = StateT { s =>
+          fa.run(s).map { a => (s, a) }
+        }
+      }
+
+      // Ещё можно будет понизить в меньшую сторону - т.е. до MinMax, применив сеттинги на месте, если это возможно
+      val guessJ: J[Client[J]] = kToS.apply(clientF).map (client => client andThen StateT.liftF[IO, NewGame, AttemptResult])
+      val getNext: GameStrategy[J] = BotStrategy.apply[IO] andThen { minMaxS =>
+        // val test: StateT[IO, NewGame, Int] = s.[NewGame](s => MinMax(s.min, s.max)) // CONTRAMAP!
+        StateT[IO, NewGame, Int] { s => minMaxS.run(MinMax(s.min, s.max)).map { t => val mm = t._1; (NewGame(mm.min, mm.max, 0), t._2) } }
+      }
+
+      val guessJDecorated: J[Client[J]] = guessJ.map(decoratedGuess[J])
+      val getNextDecorated: GameStrategy[J] = decoratedGetNext(getNext) >=> { number => Console[J].putStrLn(number.toString).as(number) }
+
+      val gameJ = genGame(guessJDecorated, getNextDecorated).runA _
+      genProgram44(SettingsService.console[IO], gameJ)
     }.void
   }
 }
