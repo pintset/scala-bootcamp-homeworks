@@ -37,5 +37,5 @@ object Client {
   }
 
   def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, Kleisli[F, NewGame, Client[F]]] =
-    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => Kleisli(apply[F](client, host)) }
+    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => Kleisli(Client[F](client, host)) }
 }

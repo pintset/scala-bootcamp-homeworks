@@ -261,6 +261,22 @@ object GuessClient extends IOApp.Simple {
 
       val gameJ = genGame(guessJDecorated, getNextDecorated).runA _
       genProgram44(SettingsService.console[IO], gameJ)
+
+      // Bot 3
+      type K[A] = StateT[IO, MinMax, A]
+      val gameK = { (settings: NewGame) =>
+        val guessK: K[Client[K]] =
+          StateT.liftF[IO, MinMax, Int => IO[AttemptResult]](clientF.run(settings)).map(client => client andThen StateT.liftF[IO, MinMax, AttemptResult])
+
+        val getNextK: GameStrategy[K] = BotStrategy.apply[IO]
+
+        val guessDecorated: K[Client[K]] = guessK.map(decoratedGuess[K])
+        val getNextDecorated: GameStrategy[K] = decoratedGetNext(getNextK) >=> { number => Console[K].putStrLn(number.toString).as(number) }
+
+        genGame(guessDecorated, getNextDecorated).runA(MinMax(settings.min, settings.max))
+      }
+
+      genProgram44(SettingsService.console[IO], gameK)
     }.void
   }
 }
