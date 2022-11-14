@@ -88,6 +88,14 @@ object GuessClient extends IOApp.Simple {
     loop(Option.empty)
   }
 
+  // ??? Фактически потенциально можно построить всю игру прямо в ран? Восользовавшись несколькими хелперами
+  def genGame3[F[_] : Monad](move: Option[AttemptResult] => F[AttemptResult]): F[AttemptResult] = {
+    def loop: Option[AttemptResult] => F[AttemptResult] =
+      move >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+
+    loop(Option.empty)
+  }
+
   def genProgram[F[_] : Monad](settingsService: SettingsService[F], game: NewGame => F[AttemptResult]) =
     settingsService.getSettings >>= game
 
@@ -108,28 +116,43 @@ object GuessClient extends IOApp.Simple {
     guessF(settings)
       .map { _ andThen StateT.liftF[F, MinMax, AttemptResult] }
       .flatMap { guess =>
+        // TODO
+        // Это не здесь должно происходить. У меня должна быть возможность сделать игру с декорациями и без!
+        // Это должен быть полностью отдельный функционал, который можно добавлять и убирать одной строчкой для
+        // для консоли и для бота
         val getNext =
           decoratedGetNext(BotStrategy[F]) >=> { number => Console[StateT[F, MinMax, *]].putStrLn(number.toString).as(number) }
 
         genGame2(decoratedGuess(guess), getNext).runA(MinMax(settings.min, settings.max))
       }
 
+  // Сколько параметров будет?
+  // хост(ip и порт), клиентбилдер (хттп или ws), провайдер игровых сеттингов, гейм билдер на их основе.
+  // То что вверху и есть цепочка. Так надо и написать
+
   // Build generic run ???
-  def run: IO[Unit] =
+  def run: IO[Unit] = {
+    val test = ipv4"localhost:9001"
+    test.value
+
     // TODO: Console is being recreated multiple times (everytime it is being accessed)
     // implicit val console = Console[IO]
 
     // import org.http4s.client.middleware.Logger
     // тут потенциально может захотеться менять клиента не таким образом. А задавать хост с портом,
     // а потом указывать тип клиента - как-то так
+    // Попробуем это сделать когда появится ws клиент
+
     http.Client
       .resource[IO](uri"http://localhost:9001")
+      // вот здесь можно создавать move(attempt) вместо игры
       // .map(consoleGame2[IO])
       .map(botGame2[IO])
       .use { game => genProgram(SettingsService.console[IO], game) }
       .void
+  }
 
-//  def run: IO[Unit] = {
+  //  def run: IO[Unit] = {
 //    // TODO: Console is being recreated multiple times (everytime it is being accessed)
 //    // implicit val console = Console[IO]
 //
