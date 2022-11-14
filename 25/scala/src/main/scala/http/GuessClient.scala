@@ -32,12 +32,28 @@ object GuessClient extends IOApp.Simple {
 
   // Технически, getNextValue + guess - это и есть move
   // Выходит, что всё что надо сделать - это разбить botMove
-  final case class Game[F[_]](getNextValue: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult])
 
-  def gameLoop[F[_] : Monad](game: Game[F]): F[AttemptResult] = {
+  // Мне необходимо обеспечить возможно хранить эти составляющие отдельно, чтобы была возможность их декорировать
+  // А складывать вместе на самом последнем этапе
+  final case class Move[F[_]](getNext: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult])
+  final case class MoveF[F[_]](getNext: Option[AttemptResult] => F[Int], guess: F[Int => F[AttemptResult]])
+
+  // Можно написать для move что-то вроде функции build, которая будет строить move как F[AttemptResult], т.е.
+  // соединять getNext с guess
+  def toConsoleMove[F[_]: Sync](move: Move[F]): Move[F] = {
+    val getNext = { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> move.getNext
+
+    val show = common.domain.gameResultShow.show _
+    val guess =
+      move.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+
+    Move(getNext, guess)
+  }
+
+  def gameLoop[F[_] : Monad](move: Move[F]): F[AttemptResult] = {
     def loop(attemptResultOpt: Option[AttemptResult]): F[AttemptResult] =
-      game.getNextValue(attemptResultOpt) >>=
-        game.guess >>=
+      move.getNext(attemptResultOpt) >>=
+        move.guess >>=
         { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
 
     loop(None)
@@ -54,19 +70,8 @@ object GuessClient extends IOApp.Simple {
 
   def printNext[F[_]: Sync]: Int => F[Int] = { (number: Int) => Console[F].putStrLn(number.toString).as(number) }
 
-  def toConsoleGame[F[_]: Sync](game: Game[F]): Game[F] = {
-    val getNextValue =
-      { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> game.getNextValue
-
-    val show = common.domain.gameResultShow.show _
-    val guess =
-      game.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
-
-    Game(getNextValue, guess)
-  }
-
   def consoleGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
-    val game = toConsoleGame(Game(common.ConsoleStrategy.apply, client))
+    val game = toConsoleMove(Move(common.ConsoleStrategy.apply, client))
     ReaderT.liftF(gameLoop(game))
   }
 
@@ -112,6 +117,13 @@ object GuessClient extends IOApp.Simple {
   def consoleGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
     guessF >=> { guess => genGame2(decoratedGuess(guess), decoratedGetNext(ConsoleStrategy[F])) }
 
+  def consoleGame3[F[_]: Sync](guessF: NewGame => F[Client[F]]) = {
+    type G[A] = Kleisli[F, NewGame, A]
+    val guessG: G[Client[G]] = Kleisli(guessF).map { _ andThen Kleisli.liftF }
+    val getNextG: GameStrategy[G] = ConsoleStrategy[F] andThen Kleisli.liftF
+    MoveF[G](getNextG, guessG)
+  }
+
   def botGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
       .map { _ andThen StateT.liftF[F, MinMax, AttemptResult] }
@@ -120,6 +132,8 @@ object GuessClient extends IOApp.Simple {
         // Это не здесь должно происходить. У меня должна быть возможность сделать игру с декорациями и без!
         // Это должен быть полностью отдельный функционал, который можно добавлять и убирать одной строчкой для
         // для консоли и для бота
+        // По сути, это означает что мне нужно приводить и возвращать guess и getNext в виде одной монады.
+        // Лучше всего скорее всего строить Game, а потом его декорировать?
         val getNext =
           decoratedGetNext(BotStrategy[F]) >=> { number => Console[StateT[F, MinMax, *]].putStrLn(number.toString).as(number) }
 
