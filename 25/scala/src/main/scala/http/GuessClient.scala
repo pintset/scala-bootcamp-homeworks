@@ -17,7 +17,7 @@ import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import common.BotStrategy.MinMax
+import common.BotStrategy.MoveState
 import common.{BotStrategy, Client, ConsoleStrategy, GameStrategy, TheGame}
 
 import scala.concurrent.ExecutionContext
@@ -35,13 +35,13 @@ object GuessClient extends IOApp.Simple {
 
   // Мне необходимо обеспечить возможно хранить эти составляющие отдельно, чтобы была возможность их декорировать
   // А складывать вместе на самом последнем этапе
-  final case class Move[F[_]](getNext: Option[AttemptResult] => F[Int], guess: Int => F[AttemptResult])
-  final case class MoveF[F[_]](getNext: Option[AttemptResult] => F[Int], guess: F[Int => F[AttemptResult]])
+  final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
+  final case class MoveF[F[_]](getNext: F[Int], guess: F[Int => F[AttemptResult]])
 
   // Можно написать для move что-то вроде функции build, которая будет строить move как F[AttemptResult], т.е.
   // соединять getNext с guess
   def toConsoleMove[F[_]: Sync](move: Move[F]): Move[F] = {
-    val getNext = { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> move.getNext
+    val getNext = Console[F].putStr("Enter your guess: ") >> move.getNext
 
     val show = common.domain.gameResultShow.show _
     val guess =
@@ -51,17 +51,17 @@ object GuessClient extends IOApp.Simple {
   }
 
   def gameLoop[F[_] : Monad](move: Move[F]): F[AttemptResult] = {
-    def loop(attemptResultOpt: Option[AttemptResult]): F[AttemptResult] =
-      move.getNext(attemptResultOpt) >>=
+    def loop: F[AttemptResult] =
+      move.getNext>>=
         move.guess >>=
-        { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+        { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop }
 
-    loop(None)
+    loop
   }
 
   // Можно ещё вместо этого сделать консоль game, и передать его в gameLoop. Тогда не нужен будет consoleGameLoop
   def decoratedGetNext[F[_]: Sync](getNext: GameStrategy[F]): GameStrategy[F] =
-    { o: Option[AttemptResult] => Console[F].putStr("Enter your guess: ").as(o) } >=> getNext
+    Console[F].putStr("Enter your guess: ") >> getNext
 
   def decoratedGuess[F[_]: Sync](guess: Client[F]): Client[F] = {
     val show = common.domain.gameResultShow.show _
@@ -70,19 +70,14 @@ object GuessClient extends IOApp.Simple {
 
   def printNext[F[_]: Sync]: Int => F[Int] = { (number: Int) => Console[F].putStrLn(number.toString).as(number) }
 
-  def consoleGame[F[_]: Sync](client: common.Client[F]): ReaderT[F, NewGame, AttemptResult] = {
-    val game = toConsoleMove(Move(common.ConsoleStrategy.apply, client))
-    ReaderT.liftF(gameLoop(game))
-  }
-
   // А клиента со стратегией можно сделать консольными до подачи сюда
   // Теперь достаточно передать туда монады - и всё заработать должно
-  def genGame[F[_] : Monad](guessF: F[Int => F[AttemptResult]], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
+  def genGame[F[_] : Monad](guessF: F[Int => F[AttemptResult]], getNext: F[Int]): F[AttemptResult] = {
     guessF >>= { guess =>
-      def loop: Option[AttemptResult] => F[AttemptResult] =
-        getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+      def loop: F[AttemptResult] =
+        getNext >>= guess >>= { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop }
 
-      loop(Option.empty)
+      loop
     }
   }
 
@@ -92,33 +87,26 @@ object GuessClient extends IOApp.Simple {
   }
 
   // Запихнуть ли Option[AttemptResult] в стейт? Надо прикинуть такую версию
-  def genGameR[F[_] : Monad](guess: Int => F[AttemptResult], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
-    def loop: Option[AttemptResult] => F[AttemptResult] =
-      getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+  def genGame2[F[_] : Monad](guess: Int => F[AttemptResult], getNext: F[Int]): F[AttemptResult] = {
+    def loop: F[AttemptResult] =
+      getNext >>= guess >>= { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop }
 
-    loop(Option.empty)
-  }
-
-  def genGame2[F[_] : Monad](guess: Int => F[AttemptResult], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
-    def loop: Option[AttemptResult] => F[AttemptResult] =
-      getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
-
-    loop(Option.empty)
+    loop
   }
 
   def genGame22[F[_] : Monad](move: Move[F]): F[AttemptResult] = {
-    def loop: Option[AttemptResult] => F[AttemptResult] =
-      move.getNext >=> move.guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+    def loop: F[AttemptResult] =
+      move.getNext >>= move.guess >>= { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop }
 
-    loop(Option.empty)
+    loop
   }
 
   // ??? Фактически потенциально можно построить всю игру прямо в ран? Восользовавшись несколькими хелперами
-  def genGame3[F[_] : Monad](move: Option[AttemptResult] => F[AttemptResult]): F[AttemptResult] = {
-    def loop: Option[AttemptResult] => F[AttemptResult] =
-      move >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+  def genGame3[F[_] : Monad](move: F[AttemptResult]): F[AttemptResult] = {
+    def loop: F[AttemptResult] =
+      move >>= { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop }
 
-    loop(Option.empty)
+    loop
   }
 
   def genProgram[F[_] : Monad](settingsService: SettingsService[F], game: NewGame => F[AttemptResult]) =
@@ -127,7 +115,7 @@ object GuessClient extends IOApp.Simple {
   def consoleGame[F[_]: Sync](guessF: Kleisli[F, NewGame, Client[F]]): NewGame => F[AttemptResult] = {
     type G[A] = Kleisli[F, NewGame, A]
     val guessG: G[Client[G]] = guessF.map { guess => guess andThen Kleisli.liftF[F, NewGame, AttemptResult] }
-    val getNextG: GameStrategy[G] = ConsoleStrategy.apply[F] _ andThen Kleisli.liftF[F, NewGame, Int]
+    val getNextG: GameStrategy[G] = Kleisli.liftF[F, NewGame, Int](ConsoleStrategy[F])
     val guessGDecorated: G[Client[G]] = guessG.map(guess => decoratedGuess(guess))
 
     // generic game
@@ -147,7 +135,11 @@ object GuessClient extends IOApp.Simple {
 
   def botGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
-      .map { _ andThen StateT.liftF[F, MinMax, AttemptResult] }
+      .map { clientF =>
+        (number: Int) => StateT { move: MoveState =>
+          clientF(number).map { r => (move.copy(attemptResultOpt = Option(r)), r) }
+        }
+      }
       .flatMap { guess =>
         // TODO
         // Это не здесь должно происходить. У меня должна быть возможность сделать игру с декорациями и без!
@@ -156,71 +148,86 @@ object GuessClient extends IOApp.Simple {
         // По сути, это означает что мне нужно приводить и возвращать guess и getNext в виде одной монады.
         // Лучше всего скорее всего строить Game, а потом его декорировать?
         val getNext =
-          decoratedGetNext(BotStrategy[F]) >=> { number => Console[StateT[F, MinMax, *]].putStrLn(number.toString).as(number) }
+          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
 
-        genGame2(decoratedGuess(guess), getNext).runA(MinMax(settings.min, settings.max))
+        genGame2(decoratedGuess(guess), getNext).runA(MoveState(settings.min, settings.max, None))
       }
 
-  def botGame3[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MinMax, *]]): TheGame[F] = settings =>
-    guessF(settings)
-      .map { _.map(StateT.liftF[F, MinMax, AttemptResult]) }
-      .flatMap { guess => genGame2(guess, strategy).runA(MinMax(settings.min, settings.max)) }
+  def toBotClient[F[_]: Monad](guess: Int => F[AttemptResult]) =
+    guess.map { fa => StateT { move: MoveState => fa.map { a => (move.copy(attemptResultOpt = Option(a)), a) } } }
 
-  def botGame4[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MinMax, *]]): TheGame[F] =  {
-    type G[A] = StateT[F, MinMax, A]
+  def botGame3[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MoveState, *]]): TheGame[F] = settings =>
+    guessF(settings)
+      // .map { _.map { fa => StateT { move: MoveState => fa.map { a => (move.copy(attemptResultOpt = Option(a)), a) } } } }
+      .map(toBotClient[F])
+      .flatMap { guess => genGame2(guess, strategy).runA(MoveState(settings.min, settings.max, None)) }
+
+  def botGame4[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MoveState, *]]): TheGame[F] =  {
+    type G[A] = StateT[F, MoveState, A]
 
     val f: NewGame => G[AttemptResult] =
       guessF
-        .map { fClientF => StateT.liftF[F, MinMax, Client[G]](fClientF.map { _ andThen StateT.liftF }) }
+        .map { fClientF => StateT.liftF[F, MoveState, Client[G]](fClientF.map { clientF =>
+          (number: Int) =>
+            StateT { move: MoveState =>
+              clientF(number).map { r => (move.copy(attemptResultOpt = Option(r)), r) }
+            }
+        }) }
         .map { gClientG => genGame(gClientG, strategy) }
 
-    settings => f(settings).runA(MinMax(settings.min, settings.max))
+    settings => f(settings).runA(MoveState(settings.min, settings.max, None))
   }
 
   def consoleMove[F[_]: Sync](guess: Int => F[AttemptResult]): Move[F] =
     Move(ConsoleStrategy[F], guess)
 
-  def botMove[F[_]: Applicative](guess: Int => F[AttemptResult]) = {
-    val botGuess = guess andThen StateT.liftF[F, MinMax, AttemptResult]
-    Move(BotStrategy[F], botGuess)
-  }
+  def botMove[F[_]: Monad](guess: Int => F[AttemptResult]): Move[StateT[F, MoveState, *]] =
+    Move(BotStrategy[F], toBotClient(guess))
+
+  def botMoveF[F[_] : Monad](guessF: F[Int => F[AttemptResult]]): F[Move[StateT[F, MoveState, *]]] =
+    guessF.map { guess => Move(BotStrategy[F], toBotClient(guess)) }
+
+//  def botMove[F[_]: Applicative](guess: Int => F[AttemptResult]) = {
+//    val botGuess = guess andThen StateT.liftF[F, MoveState, AttemptResult]
+//    Move(BotStrategy[F], botGuess)
+//  }
 
   // Сколько параметров будет?
   // хост(ip и порт), клиентбилдер (хттп или ws), провайдер игровых сеттингов, гейм билдер на их основе.
   // То что вверху и есть цепочка. Так надо и написать
 
-  def genRun1[F[_] : Concurrent : ConcurrentEffect] = {
-    http.Client
-      .resource[F](uri"http://localhost:9001")
-      .map { guessF =>
-        settings: NewGame =>
-          guessF(settings)
-            //.map(consoleMove)
-            // Тогда возникает проблема в том что сеттинги нужно дёргать - т.е. вылазит проблема сеттингов
-            // из-за того что toConsoleMove - разделен
-            .map(botMove)
-            // Возникает разница в последнем флатмапе - можно правда попробовать это тоже куда-то вынести
-            // Т.е. всё в принципе хорошо, кроме того что toConsoleMove торчит в середине
-            // если сместить это в начало самое - будет сильно лучше. Тогда я смогу объединить
-            // move с нижним флатмапом и получить F
-            .map(toConsoleMove)
-
-            //.flatMap(genGame22)
-            .flatMap(genGame22(_).runA(MinMax(settings.min, settings.max)))
-        }
-  }
+//  def genRun1[F[_] : Concurrent : ConcurrentEffect] = {
+//    http.Client
+//      .resource[F](uri"http://localhost:9001")
+//      .map { guessF =>
+//        settings: NewGame =>
+//          guessF(settings)
+//            //.map(consoleMove)
+//            // Тогда возникает проблема в том что сеттинги нужно дёргать - т.е. вылазит проблема сеттингов
+//            // из-за того что toConsoleMove - разделен
+//            .map(botMove)
+//            // Возникает разница в последнем флатмапе - можно правда попробовать это тоже куда-то вынести
+//            // Т.е. всё в принципе хорошо, кроме того что toConsoleMove торчит в середине
+//            // если сместить это в начало самое - будет сильно лучше. Тогда я смогу объединить
+//            // move с нижним флатмапом и получить F
+//            .map(toConsoleMove)
+//
+//            //.flatMap(genGame22)
+//            .flatMap(genGame22(_).runA(MinMax(settings.min, settings.max)))
+//        }
+//  }
 
   // TODO: Почему нельзя построить тип Game? Ведь сеттинги есть
 
-  def genRun[F[_] : Concurrent : ConcurrentEffect] = {
+  def genRun2[F[_] : Concurrent : ConcurrentEffect] = {
     http.Client
       .resource[F](uri"http://localhost:9001")
       .map { guessF =>
-        val guessFDecorated = guessF.andThen(_.map(decoratedGuess))
+        val guessFDecorated = guessF.andThen(_.map(decoratedGuess[F]))
         // val strategyDecorated = decoratedGetNext(ConsoleStrategy[F])
         val strategyDecorated =
         // На это забъём короче
-          decoratedGetNext(BotStrategy[F]) >=> { number => Console[StateT[F, MinMax, *]].putStrLn(number.toString).as(number) }
+          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
 
         // consoleGame3(guessFDecorated, strategyDecorated)
         botGame3(guessFDecorated, strategyDecorated)
@@ -229,27 +236,77 @@ object GuessClient extends IOApp.Simple {
       .void
   }
 
-  // Build generic run ???
-  def run: IO[Unit] = {
-    val test = ipv4"localhost:9001"
-    test.value
-
-    // TODO: Console is being recreated multiple times (everytime it is being accessed)
-    // implicit val console = Console[IO]
-
-    // import org.http4s.client.middleware.Logger
-    // тут потенциально может захотеться менять клиента не таким образом. А задавать хост с портом,
-    // а потом указывать тип клиента - как-то так
-    // Попробуем это сделать когда появится ws клиент
-
+  def genRun[F[_] : Concurrent : ConcurrentEffect] = {
     http.Client
-      .resource[IO](uri"http://localhost:9001")
-      // вот здесь можно создавать move(attempt) вместо игры
-      // .map(consoleGame2[IO])
-      .map(botGame2[IO])
-      .use { game => genProgram(SettingsService.console[IO], game) }
+      .resource[F](uri"http://localhost:9001")
+
+//      .map { guessF =>
+//        val strategyDecorated =
+//          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+//
+//        val guessFDecorated: NewGame => F[Move[StateT[F, MoveState, *]]] =
+//          guessF.map(_.map(decoratedGuess[F] _ andThen { guess =>
+//            Move(strategyDecorated, toBotClient(guess))
+//          }))
+//
+//        guessFDecorated
+//      }
+
+      // Without decorations
+      .map { guessF =>
+        val strategyDecorated = BotStrategy[F]
+        val guessFDecorated: NewGame => F[Move[StateT[F, MoveState, *]]] =
+          guessF.map(_.map { guess => Move(strategyDecorated, toBotClient(guess)) })
+
+        guessFDecorated
+      }
+
+      // Separate decorations
+      .map { guessF =>
+        guessF.map(_.map { move =>
+          val getNext =
+            decoratedGetNext(move.getNext) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+
+          val guess = decoratedGuess(move.guess)
+
+          Move(getNext, guess)
+        })
+      }
+
+      // Game
+      .map { guessF =>
+        (s: NewGame) =>
+          guessF(s) >>= { move => genGame22(move).runA(MoveState(s.min, s.max, None)) }
+      }
+
+      // Fire
+      .use { game => genProgram(SettingsService.console[F], game) }
       .void
   }
+
+  def run: IO[Unit] = genRun[IO]
+
+//  // Build generic run ???
+//  def run: IO[Unit] = {
+//    val test = ipv4"localhost:9001"
+//    test.value
+//
+//    // TODO: Console is being recreated multiple times (everytime it is being accessed)
+//    // implicit val console = Console[IO]
+//
+//    // import org.http4s.client.middleware.Logger
+//    // тут потенциально может захотеться менять клиента не таким образом. А задавать хост с портом,
+//    // а потом указывать тип клиента - как-то так
+//    // Попробуем это сделать когда появится ws клиент
+//
+//    http.Client
+//      .resource[IO](uri"http://localhost:9001")
+//      // вот здесь можно создавать move(attempt) вместо игры
+//      // .map(consoleGame2[IO])
+//      .map(botGame2[IO])
+//      .use { game => genProgram(SettingsService.console[IO], game) }
+//      .void
+//  }
 
   //  def run: IO[Unit] = {
 //    // TODO: Console is being recreated multiple times (everytime it is being accessed)

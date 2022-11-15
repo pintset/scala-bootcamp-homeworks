@@ -2,25 +2,23 @@ package common
 
 import cats.Applicative
 import cats.data.StateT
-import common.domain.{Greater, Lower}
+import common.domain.{AttemptResult, Greater, Lower}
 
 object BotStrategy {
-  final case class MinMax(min: Int, max: Int)
+  final case class MoveState(min: Int, max: Int, attemptResultOpt: Option[AttemptResult])
 
-  def apply[F[_] : Applicative]: GameStrategy[StateT[F, MinMax, *]] = prevAttemptResultOpt => {
-    def strategy(v: MinMax): Int = v.min + (v.max - v.min) / 2
+  def apply[F[_] : Applicative]: GameStrategy[StateT[F, MoveState, *]] = {
+    def strategy(min: Int, max: Int): Int = min + (max - min) / 2
 
-    def nextMinMax(prev: MinMax): MinMax =
-      prevAttemptResultOpt.map {
-        case Greater(_) => MinMax(prev.min, strategy(prev))
-        case Lower(_)   => MinMax(strategy(prev), prev.max)
+    def nextMinMax(prev: MoveState): MoveState =
+      prev.attemptResultOpt.map {
+        case Greater(_) => prev.copy(max = strategy(prev.min, prev.max))
+        case Lower(_)   => prev.copy(min = strategy(prev.min, prev.max))
         case _          => prev
       }.getOrElse(prev)
 
     StateT
-      // Эта штука должна быть впереди потому что стратегия считает
-      // nextGuess для новой пары, а не для старой
       .modify(nextMinMax)
-      .inspect(strategy)
+      .inspect(s => strategy(s.min, s.max))
   }
 }
