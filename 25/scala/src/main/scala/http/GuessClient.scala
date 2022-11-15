@@ -1,9 +1,9 @@
 package http
 
 import cats.data.{IndexedStateT, Kleisli, Reader, ReaderT, StateT}
-import cats.{Id, Monad, ~>}
+import cats.{Applicative, Id, Monad, ~>}
 import cats.arrow.FunctionK
-import cats.effect.{Concurrent, IO, IOApp, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, IO, IOApp, Sync}
 import cats.implicits.catsSyntaxFunction1FlatMap
 import org.http4s.Uri
 import client.SettingsService
@@ -86,9 +86,29 @@ object GuessClient extends IOApp.Simple {
     }
   }
 
+  implicit class RepeatOps[F[_]: Monad, A](fa: F[A]) {
+    def repeatWhile(predicate: A => Boolean): F[A] =
+      fa.flatMap { a => if (predicate(a)) repeatWhile(predicate) else Monad[F].pure(a) }
+  }
+
+  // Запихнуть ли Option[AttemptResult] в стейт? Надо прикинуть такую версию
+  def genGameR[F[_] : Monad](guess: Int => F[AttemptResult], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
+    def loop: Option[AttemptResult] => F[AttemptResult] =
+      getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+
+    loop(Option.empty)
+  }
+
   def genGame2[F[_] : Monad](guess: Int => F[AttemptResult], getNext: Option[AttemptResult] => F[Int]): F[AttemptResult] = {
     def loop: Option[AttemptResult] => F[AttemptResult] =
       getNext >=> guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
+
+    loop(Option.empty)
+  }
+
+  def genGame22[F[_] : Monad](move: Move[F]): F[AttemptResult] = {
+    def loop: Option[AttemptResult] => F[AttemptResult] =
+      move.getNext >=> move.guess >=> { attemptResult => if (attemptResult.gameIsFinished) Monad[F].pure(attemptResult) else loop(Option(attemptResult)) }
 
     loop(Option.empty)
   }
@@ -117,12 +137,13 @@ object GuessClient extends IOApp.Simple {
   def consoleGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
     guessF >=> { guess => genGame2(decoratedGuess(guess), decoratedGetNext(ConsoleStrategy[F])) }
 
-  def consoleGame3[F[_]: Sync](guessF: NewGame => F[Client[F]]) = {
-    type G[A] = Kleisli[F, NewGame, A]
-    val guessG: G[Client[G]] = Kleisli(guessF).map { _ andThen Kleisli.liftF }
-    val getNextG: GameStrategy[G] = ConsoleStrategy[F] andThen Kleisli.liftF
-    MoveF[G](getNextG, guessG)
-  }
+  def consoleGame3[F[_]: Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[F]): TheGame[F] =
+    guessF >=> { guess => genGame2(guess, strategy) }
+
+  // genGame можно сделать как функцию, принимающую клиента, и возвращающую то что принимает стратегию
+  // Должно быть красивее
+  def consoleGame4[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[F]): TheGame[F] =
+    guessF.map { x => genGame(x, strategy) }
 
   def botGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
@@ -140,9 +161,73 @@ object GuessClient extends IOApp.Simple {
         genGame2(decoratedGuess(guess), getNext).runA(MinMax(settings.min, settings.max))
       }
 
+  def botGame3[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MinMax, *]]): TheGame[F] = settings =>
+    guessF(settings)
+      .map { _.map(StateT.liftF[F, MinMax, AttemptResult]) }
+      .flatMap { guess => genGame2(guess, strategy).runA(MinMax(settings.min, settings.max)) }
+
+  def botGame4[F[_] : Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[StateT[F, MinMax, *]]): TheGame[F] =  {
+    type G[A] = StateT[F, MinMax, A]
+
+    val f: NewGame => G[AttemptResult] =
+      guessF
+        .map { fClientF => StateT.liftF[F, MinMax, Client[G]](fClientF.map { _ andThen StateT.liftF }) }
+        .map { gClientG => genGame(gClientG, strategy) }
+
+    settings => f(settings).runA(MinMax(settings.min, settings.max))
+  }
+
+  def consoleMove[F[_]: Sync](guess: Int => F[AttemptResult]): Move[F] =
+    Move(ConsoleStrategy[F], guess)
+
+  def botMove[F[_]: Applicative](guess: Int => F[AttemptResult]) = {
+    val botGuess = guess andThen StateT.liftF[F, MinMax, AttemptResult]
+    Move(BotStrategy[F], botGuess)
+  }
+
   // Сколько параметров будет?
   // хост(ip и порт), клиентбилдер (хттп или ws), провайдер игровых сеттингов, гейм билдер на их основе.
   // То что вверху и есть цепочка. Так надо и написать
+
+  def genRun1[F[_] : Concurrent : ConcurrentEffect] = {
+    http.Client
+      .resource[F](uri"http://localhost:9001")
+      .map { guessF =>
+        settings: NewGame =>
+          guessF(settings)
+            //.map(consoleMove)
+            // Тогда возникает проблема в том что сеттинги нужно дёргать - т.е. вылазит проблема сеттингов
+            // из-за того что toConsoleMove - разделен
+            .map(botMove)
+            // Возникает разница в последнем флатмапе - можно правда попробовать это тоже куда-то вынести
+            // Т.е. всё в принципе хорошо, кроме того что toConsoleMove торчит в середине
+            // если сместить это в начало самое - будет сильно лучше. Тогда я смогу объединить
+            // move с нижним флатмапом и получить F
+            .map(toConsoleMove)
+
+            //.flatMap(genGame22)
+            .flatMap(genGame22(_).runA(MinMax(settings.min, settings.max)))
+        }
+  }
+
+  // TODO: Почему нельзя построить тип Game? Ведь сеттинги есть
+
+  def genRun[F[_] : Concurrent : ConcurrentEffect] = {
+    http.Client
+      .resource[F](uri"http://localhost:9001")
+      .map { guessF =>
+        val guessFDecorated = guessF.andThen(_.map(decoratedGuess))
+        // val strategyDecorated = decoratedGetNext(ConsoleStrategy[F])
+        val strategyDecorated =
+        // На это забъём короче
+          decoratedGetNext(BotStrategy[F]) >=> { number => Console[StateT[F, MinMax, *]].putStrLn(number.toString).as(number) }
+
+        // consoleGame3(guessFDecorated, strategyDecorated)
+        botGame3(guessFDecorated, strategyDecorated)
+      }
+      .use { game => genProgram(SettingsService.console[F], game) }
+      .void
+  }
 
   // Build generic run ???
   def run: IO[Unit] = {
