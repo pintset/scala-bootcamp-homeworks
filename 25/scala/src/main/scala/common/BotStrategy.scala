@@ -3,6 +3,7 @@ package common
 import cats.Applicative
 import cats.data.StateT
 import common.domain.{AttemptResult, Greater, Lower}
+import http.GuessClient.Move
 
 object BotStrategy {
   final case class MoveState(min: Int, max: Int, attemptResultOpt: Option[AttemptResult])
@@ -21,4 +22,8 @@ object BotStrategy {
       .modify(nextMinMax)
       .inspect(s => strategy(s.min, s.max))
   }
+
+  // Переименовать в гейм?
+  def move[F[_] : Applicative](guess: Int => StateT[F, MoveState, AttemptResult]): Move[StateT[F, MoveState, *]] =
+    Move(BotStrategy[F], guess)
 }

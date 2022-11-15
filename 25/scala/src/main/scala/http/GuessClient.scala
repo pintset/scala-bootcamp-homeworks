@@ -240,43 +240,40 @@ object GuessClient extends IOApp.Simple {
     http.Client
       .resource[F](uri"http://localhost:9001")
 
-//      .map { guessF =>
-//        val strategyDecorated =
-//          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
-//
-//        val guessFDecorated: NewGame => F[Move[StateT[F, MoveState, *]]] =
-//          guessF.map(_.map(decoratedGuess[F] _ andThen { guess =>
-//            Move(strategyDecorated, toBotClient(guess))
-//          }))
-//
-//        guessFDecorated
-//      }
-
-      // Without decorations
       .map { guessF =>
-        val strategyDecorated = BotStrategy[F]
-        val guessFDecorated: NewGame => F[Move[StateT[F, MoveState, *]]] =
-          guessF.map(_.map { guess => Move(strategyDecorated, toBotClient(guess)) })
+        guessF.map { fClientF =>
 
-        guessFDecorated
-      }
+          fClientF
+//            .map { guess => Move(ConsoleStrategy[F], guess) }
+             .map(toBotClient andThen BotStrategy.move)
 
-      // Separate decorations
-      .map { guessF =>
-        guessF.map(_.map { move =>
-          val getNext =
-            decoratedGetNext(move.getNext) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+//            .map { move =>
+//              val getNext = decoratedGetNext(move.getNext : GameStrategy[F])
+//              val guess = decoratedGuess(move.guess)
+//
+//              Move(getNext, guess)
+//            }
 
-          val guess = decoratedGuess(move.guess)
+            .map { move =>
+              val getNext =
+                decoratedGetNext(move.getNext) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
 
-          Move(getNext, guess)
-        })
+              val guess = decoratedGuess(move.guess)
+
+              Move(getNext, guess)
+            }
+
+            //.flatMap(genGame22)
+        }
       }
 
       // Game
+//      .map { guessF =>
+//        (s: NewGame) => guessF(s) >>= genGame22 }
+//      }
+      // Проблема в том что у меня тут всё равно торчит вот этот ран
       .map { guessF =>
-        (s: NewGame) =>
-          guessF(s) >>= { move => genGame22(move).runA(MoveState(s.min, s.max, None)) }
+        (s: NewGame) => guessF(s) >>= { move => genGame22(move).runA(MoveState(s.min, s.max, None)) }
       }
 
       // Fire
