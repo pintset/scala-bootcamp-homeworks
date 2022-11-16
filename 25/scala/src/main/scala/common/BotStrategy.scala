@@ -3,8 +3,7 @@ package common
 import cats.Applicative
 import cats.data.StateT
 import cats.implicits.toFunctorOps
-import common.domain.{AttemptResult, Greater, Lower}
-import http.GuessClient.Move
+import common.domain.{AttemptResult, Greater, Lower, Move}
 
 object BotStrategy {
   final case class MoveState(min: Int, max: Int, attemptResultOpt: Option[AttemptResult])

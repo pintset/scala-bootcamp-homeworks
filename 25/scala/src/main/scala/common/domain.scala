@@ -11,6 +11,9 @@ import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredCodec
 
 object domain {
+  // Нужно чтобы к классу move можно было добавлять getGame
+  final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
+
   final case class Game(guessedNumber: Int, attemptsLeft: Int) {
     def result(guess: Int): AttemptResult =
       if (guessedNumber == guess) YouWon(attemptsLeft, guessedNumber)

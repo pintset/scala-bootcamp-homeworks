@@ -1,11 +1,9 @@
-package http
-
 import cats.data.StateT
 import cats.Monad
 import cats.effect.{Concurrent, ConcurrentEffect, IO, IOApp, Sync}
 import cats.implicits.catsSyntaxFunction1FlatMap
 import client.SettingsService
-import common.domain.{AttemptResult, NewGame}
+import common.domain.{AttemptResult, Move, NewGame}
 import effects.Console
 import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
@@ -14,10 +12,7 @@ import common.BotStrategy.MoveState
 import common.{BotStrategy, Client, ConsoleStrategy, GameStrategy, TheGame}
 
 object GuessClient extends IOApp.Simple {
-  // 1. Разобраться с протоколом
-
-  // Нужно чтобы к классу move можно было добавлять getGame
-  final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
+  // TODO: Разобраться с протоколом
 
   // Можно ещё вместо этого сделать консоль game, и передать его в gameLoop. Тогда не нужен будет consoleGameLoop
   def decorateGetNext[F[_]: Sync](getNext: GameStrategy[F]): GameStrategy[F] =
@@ -48,13 +43,13 @@ object GuessClient extends IOApp.Simple {
   }
 
   def consoleGame[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
-    guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).andThen(gameLoop[F])
+    guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map(gameLoop[F])
 
-//    guessF.map {
-//      _
-//        .map(ConsoleStrategy.move[F] _ andThen decorateMove[F])
-//        .flatMap(genGame22[F])
-//    }
+  //    guessF.map {
+  //      _
+  //        .map(ConsoleStrategy.move[F] _ andThen decorateMove[F])
+  //        .flatMap(genGame22[F])
+  //    }
 
   def botGame[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
@@ -67,7 +62,7 @@ object GuessClient extends IOApp.Simple {
       }
 
   def consoleGamePure[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
-    guessF >=> ConsoleStrategy.move[F].andThen(gameLoop[F])
+    guessF >=> (ConsoleStrategy.move[F] _).map(gameLoop[F])
 
   def botGamePure[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
@@ -84,7 +79,6 @@ object GuessClient extends IOApp.Simple {
 
     http.Client
       .resource[F](uri"http://localhost:9001")
-      // .map(consoleGame22[F])
       .map(gameBuilder)
       .use { game => settingsService.getSettings >>= game }
       .void

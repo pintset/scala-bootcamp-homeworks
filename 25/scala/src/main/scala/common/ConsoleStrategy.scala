@@ -1,10 +1,8 @@
 package common
 
-import cats.Applicative
 import cats.effect.Sync
-import common.domain.AttemptResult
+import common.domain.{AttemptResult, Move}
 import effects.Console
-import http.GuessClient.Move
 
 object ConsoleStrategy {
   def apply[F[_]: Sync]: GameStrategy[F] = Console[F].getInt
