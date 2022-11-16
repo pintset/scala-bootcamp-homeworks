@@ -2,6 +2,7 @@ package common
 
 import cats.Applicative
 import cats.data.StateT
+import cats.implicits.toFunctorOps
 import common.domain.{AttemptResult, Greater, Lower}
 import http.GuessClient.Move
 
@@ -24,6 +25,10 @@ object BotStrategy {
   }
 
   // Переименовать в гейм?
-  def move[F[_] : Applicative](guess: Int => StateT[F, MoveState, AttemptResult]): Move[StateT[F, MoveState, *]] =
-    Move(BotStrategy[F], guess)
+  def move[F[_] : Applicative](guess: Int => F[AttemptResult]): Move[StateT[F, MoveState, *]] = {
+    val liftedGuess =
+      guess.map { fa => StateT { move: MoveState => fa.map { a => (move.copy(attemptResultOpt = Option(a)), a) } } }
+
+    Move(BotStrategy[F], liftedGuess)
+  }
 }

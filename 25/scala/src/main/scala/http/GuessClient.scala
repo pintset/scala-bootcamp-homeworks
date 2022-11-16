@@ -35,6 +35,8 @@ object GuessClient extends IOApp.Simple {
 
   // Мне необходимо обеспечить возможно хранить эти составляющие отдельно, чтобы была возможность их декорировать
   // А складывать вместе на самом последнем этапе
+
+  // Нужно чтобы к классу move можно было добавлять getGame
   final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
   final case class MoveF[F[_]](getNext: F[Int], guess: F[Int => F[AttemptResult]])
 
@@ -60,12 +62,19 @@ object GuessClient extends IOApp.Simple {
   }
 
   // Можно ещё вместо этого сделать консоль game, и передать его в gameLoop. Тогда не нужен будет consoleGameLoop
-  def decoratedGetNext[F[_]: Sync](getNext: GameStrategy[F]): GameStrategy[F] =
+  def decorateGetNext[F[_]: Sync](getNext: GameStrategy[F]): GameStrategy[F] =
     Console[F].putStr("Enter your guess: ") >> getNext
 
-  def decoratedGuess[F[_]: Sync](guess: Client[F]): Client[F] = {
+  def decorateGuess[F[_]: Sync](guess: Client[F]): Client[F] = {
     val show = common.domain.gameResultShow.show _
     guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+  }
+
+  def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
+    val getNext = decorateGetNext(move.getNext: GameStrategy[F])
+    val guess = decorateGuess(move.guess)
+
+    Move(getNext, guess)
   }
 
   def printNext[F[_]: Sync]: Int => F[Int] = { (number: Int) => Console[F].putStrLn(number.toString).as(number) }
@@ -116,14 +125,14 @@ object GuessClient extends IOApp.Simple {
     type G[A] = Kleisli[F, NewGame, A]
     val guessG: G[Client[G]] = guessF.map { guess => guess andThen Kleisli.liftF[F, NewGame, AttemptResult] }
     val getNextG: GameStrategy[G] = Kleisli.liftF[F, NewGame, Int](ConsoleStrategy[F])
-    val guessGDecorated: G[Client[G]] = guessG.map(guess => decoratedGuess(guess))
+    val guessGDecorated: G[Client[G]] = guessG.map(guess => decorateGuess(guess))
 
     // generic game
     genGame(guessGDecorated, getNextG).run
   }
 
   def consoleGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
-    guessF >=> { guess => genGame2(decoratedGuess(guess), decoratedGetNext(ConsoleStrategy[F])) }
+    guessF >=> { guess => genGame2(decorateGuess(guess), decorateGetNext(ConsoleStrategy[F])) }
 
   def consoleGame3[F[_]: Sync](guessF: NewGame => F[Client[F]], strategy: GameStrategy[F]): TheGame[F] =
     guessF >=> { guess => genGame2(guess, strategy) }
@@ -135,11 +144,7 @@ object GuessClient extends IOApp.Simple {
 
   def botGame2[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
     guessF(settings)
-      .map { clientF =>
-        (number: Int) => StateT { move: MoveState =>
-          clientF(number).map { r => (move.copy(attemptResultOpt = Option(r)), r) }
-        }
-      }
+      .map(toBotClient[F])
       .flatMap { guess =>
         // TODO
         // Это не здесь должно происходить. У меня должна быть возможность сделать игру с декорациями и без!
@@ -148,9 +153,30 @@ object GuessClient extends IOApp.Simple {
         // По сути, это означает что мне нужно приводить и возвращать guess и getNext в виде одной монады.
         // Лучше всего скорее всего строить Game, а потом его декорировать?
         val getNext =
-          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+          decorateGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
 
-        genGame2(decoratedGuess(guess), getNext).runA(MoveState(settings.min, settings.max, None))
+        genGame2(decorateGuess(guess), getNext).runA(MoveState(settings.min, settings.max, None))
+      }
+
+  def consoleGame22[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] =
+    guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).andThen(genGame22[F])
+
+//    guessF.map {
+//      _
+//        .map(ConsoleStrategy.move[F] _ andThen decorateMove[F])
+//        .flatMap(genGame22[F])
+//    }
+
+
+  // TODO: Написать бот с консолью
+  def botGame22[F[_] : Sync](guessF: NewGame => F[Client[F]]): TheGame[F] = settings =>
+    guessF(settings)
+      .map(BotStrategy.move[F] _ andThen decorateMove[StateT[F, MoveState, *]])
+      .flatMap { move =>
+        val m =
+          move.copy(getNext = move.getNext >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) })
+
+        genGame22(m).runA(MoveState(settings.min, settings.max, None))
       }
 
   def toBotClient[F[_]: Monad](guess: Int => F[AttemptResult]) =
@@ -223,11 +249,11 @@ object GuessClient extends IOApp.Simple {
     http.Client
       .resource[F](uri"http://localhost:9001")
       .map { guessF =>
-        val guessFDecorated = guessF.andThen(_.map(decoratedGuess[F]))
+        val guessFDecorated = guessF.andThen(_.map(decorateGuess[F]))
         // val strategyDecorated = decoratedGetNext(ConsoleStrategy[F])
         val strategyDecorated =
         // На это забъём короче
-          decoratedGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+          decorateGetNext(BotStrategy[F]) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
 
         // consoleGame3(guessFDecorated, strategyDecorated)
         botGame3(guessFDecorated, strategyDecorated)
@@ -236,52 +262,67 @@ object GuessClient extends IOApp.Simple {
       .void
   }
 
-  def genRun[F[_] : Concurrent : ConcurrentEffect] = {
+//  def genRun3[F[_] : Concurrent : ConcurrentEffect] = {
+//    http.Client
+//      .resource[F](uri"http://localhost:9001")
+//
+//      .map { guessF =>
+//        guessF.map { fClientF =>
+//
+//          fClientF
+//            //.map { guess => Move(ConsoleStrategy[F], guess) }
+//            .map(toBotClient andThen BotStrategy.move)
+//
+//            .map(decorateMove)
+//
+//            .map { move =>
+//              val getNext =
+//                move.getNext >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
+//
+//              move.copy(getNext = getNext)
+//            }
+//
+//            // .flatMap(genGame22)
+//
+//
+//        }
+//      }
+//
+//      // Game
+////      .map { guessF =>
+////        (s: NewGame) => guessF(s) >>= genGame22
+////      }
+//      // TODO: Here
+//      // Проблема в том что у меня тут всё равно торчит вот этот ран
+//      // Можно заместить но у меня не будет взаимозаменяемости все равно
+//      // Заместить можно на функцию которая принимает move и возвращает Game
+//      // Т.е. генерик не выходит, у меня всё равно или такая игра, или такая игра
+//      // Нужно постараться сделать полный дженерик, и чтобы только в конце использовались сеттинги
+//      // Т.е. будет ок, если всё то что до сих пор будет одинаковым. Или до use
+//
+////      .map { guessF =>
+////        (s: NewGame) => guessF(s) >>= { move => genGame22(move).runA(MoveState(s.min, s.max, None)) }
+////      }
+//
+//      // Fire
+//      .use { game => genProgram(SettingsService.console[F], game) }
+//      .void
+//  }
+
+  def program[F[_] : Concurrent : ConcurrentEffect] = {
+    val settingsService = SettingsService.console
+    // val createGame = botGame22[F] _
+    val createGame = consoleGame22[F] _
+
     http.Client
       .resource[F](uri"http://localhost:9001")
-
-      .map { guessF =>
-        guessF.map { fClientF =>
-
-          fClientF
-//            .map { guess => Move(ConsoleStrategy[F], guess) }
-             .map(toBotClient andThen BotStrategy.move)
-
-//            .map { move =>
-//              val getNext = decoratedGetNext(move.getNext : GameStrategy[F])
-//              val guess = decoratedGuess(move.guess)
-//
-//              Move(getNext, guess)
-//            }
-
-            .map { move =>
-              val getNext =
-                decoratedGetNext(move.getNext) >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) }
-
-              val guess = decoratedGuess(move.guess)
-
-              Move(getNext, guess)
-            }
-
-            //.flatMap(genGame22)
-        }
-      }
-
-      // Game
-//      .map { guessF =>
-//        (s: NewGame) => guessF(s) >>= genGame22 }
-//      }
-      // Проблема в том что у меня тут всё равно торчит вот этот ран
-      .map { guessF =>
-        (s: NewGame) => guessF(s) >>= { move => genGame22(move).runA(MoveState(s.min, s.max, None)) }
-      }
-
-      // Fire
-      .use { game => genProgram(SettingsService.console[F], game) }
+      // .map(consoleGame22[F])
+      .map(createGame)
+      .use { game => settingsService.getSettings >>= game }
       .void
   }
 
-  def run: IO[Unit] = genRun[IO]
+  def run: IO[Unit] = program[IO]
 
 //  // Build generic run ???
 //  def run: IO[Unit] = {
