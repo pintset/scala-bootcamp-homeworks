@@ -1,6 +1,6 @@
 import cats.data.StateT
 import cats.Monad
-import cats.effect.{Concurrent, ConcurrentEffect, IO, IOApp, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, IOApp, Sync}
 import cats.implicits.catsSyntaxFunction1FlatMap
 import client.SettingsService
 import common.domain.{AttemptResult, Move, NewGame}
@@ -72,13 +72,15 @@ object GuessClient extends IOApp.Simple {
   // Сколько параметров будет?
   // хост(ip и порт), клиентбилдер (хттп или ws), провайдер игровых сеттингов, гейм билдер на их основе.
   // То что вверху и есть цепочка. Так надо и написать
-  def program[F[_] : Concurrent : ConcurrentEffect] = {
+  def program[F[_] : Concurrent : ContextShift : ConcurrentEffect] = {
     val settingsService = SettingsService.console
     // val createGame = botGame22[F] _
     val gameBuilder = consoleGame[F] _
 
-    http.Client
-      .resource[F](uri"http://localhost:9001")
+//    http.Client
+//      .resource[F](uri"http://localhost:9001")
+    ws.Client
+      .resource[F](uri"ws://localhost:9001/game")
       .map(gameBuilder)
       .use { game => settingsService.getSettings >>= game }
       .void

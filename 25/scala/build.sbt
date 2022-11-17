@@ -15,7 +15,8 @@ lazy val root = (project in file("."))
       "org.http4s" %% "http4s-jdk-http-client" % "0.3.6",
       "io.circe" %% "circe-generic" % CirceVersion,
       "io.circe" %% "circe-parser" % CirceVersion,
-      "io.circe" %% "circe-generic-extras" % CirceVersion
+      "io.circe" %% "circe-generic-extras" % CirceVersion,
+      "ch.qos.logback" % "logback-classic" % "1.4.4"
     ),
 
     addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full)
