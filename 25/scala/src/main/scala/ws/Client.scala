@@ -15,6 +15,8 @@ import io.circe.generic.auto._
 
 import scala.concurrent.ExecutionContext
 import effects.Console
+import io.circe.Decoder
+import GameAction.encoder
 
 import java.util.UUID
 
@@ -24,27 +26,22 @@ import java.util.UUID
 // Его можно сделать консольным добавив в конце вывод результата если надо
 object Client {
   def apply[F[_]: Concurrent : ContextShift : ConcurrentEffect](client: WSConnectionHighLevel[F], host: Uri): NewGame => F[Client[F]] = {
+    def expect[R: Decoder](gameAction: GameAction): F[R] = {
+      Console[F].putStrLn(s"Request: ${gameAction.asJson.toString}") *> client.send(WSFrame.Text(gameAction.asJson.toString)) *>
+        client.receiveStream.collectFirst { case WSFrame.Text(s, _) => s }.compile.string
+          .flatTap(s => Console[F].putStrLn(s"Response: $s"))
+          .map(decode[R]).flatMap(Sync[F].fromEither)
+    }
+
     settings =>
       Concurrent
         .memoize {
-          val request = (settings : GameAction).asJson.toString
-          Console[F].putStrLn(s"Request: $request") *> client.send(WSFrame.Text(request)) *>
-            client.receiveStream.collectFirst { case WSFrame.Text(s, _) => s }.compile.string
-              .flatTap(s => Console[F].putStrLn(s"Response: $s"))
-              .map(decode[GameId]).flatMap(Sync[F].fromEither)
+          expect[GameId](settings)
         }
 
         // gameIdF - startRequest. Creating game with gameId
         .map { gameIdF =>
-          number =>
-            gameIdF >>= { gameId =>
-              val request = (Guess(gameId, number) : GameAction).asJson.toString
-
-              Console[F].putStrLn(s"Request: $request") *> client.send(WSFrame.Text(request)) *>
-                client.receiveStream.collectFirst { case WSFrame.Text(s, _) => s }.compile.string
-                  .flatTap(s => Console[F].putStrLn(s"Response: $s"))
-                  .map(decode[AttemptResult]).flatMap(Sync[F].fromEither)
-            }
+          number => gameIdF >>= { gameId => expect[AttemptResult](Guess(gameId, number)) }
         }
   }
 

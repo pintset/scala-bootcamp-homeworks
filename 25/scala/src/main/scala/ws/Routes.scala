@@ -10,13 +10,14 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import server.GameServer
 import io.circe.parser._
-import io.circe.generic.auto._
-import org.http4s.circe.CirceEntityCodec._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.circe.syntax.EncoderOps
 import effects.Console
 
+import io.circe.generic.auto._
+import org.http4s.circe.CirceEntityCodec._
+import GameAction.decoder
 
 object Routes {
   def routes[F[_]: Concurrent](gameService: GameServer[F]): HttpRoutes[F] = {
@@ -25,7 +26,8 @@ object Routes {
 
     HttpRoutes.of[F] {
       // TODO: "game" in path here. Maybe can be removed
-      case GET -> Root / "game" =>
+      // case GET -> Root / "game" =>
+      case GET -> Root =>
         val gamePipe: Pipe[F, WebSocketFrame, WebSocketFrame] =
           _.evalMap {
             case WebSocketFrame.Text(message, _) =>

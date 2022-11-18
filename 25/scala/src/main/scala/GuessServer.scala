@@ -9,10 +9,8 @@ import org.http4s.server.blaze.BlazeServerBuilder
 import server.GameServer
 
 object GuessServer extends IOApp.Simple {
-  private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] = {
-    // http.Routes.routes(gameServer) <+> ws.Routes.routes(gameServer)
-    ws.Routes.routes(gameServer)
-  }.orNotFound
+  private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] =
+    { http.Routes.routes(gameServer) <+> ws.Routes.routes(gameServer) }.orNotFound
 
   def run: IO[Unit] =
     GameServer.of[IO].flatMap { gameServer =>

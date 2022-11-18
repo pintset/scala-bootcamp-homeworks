@@ -8,7 +8,7 @@ import java.util.UUID
 import cats.syntax.functor._
 import io.circe.{Codec, Decoder, Encoder}
 import io.circe.generic.extras.Configuration
-import io.circe.generic.extras.semiauto.deriveConfiguredCodec
+import io.circe.generic.extras.semiauto.{deriveConfiguredCodec, deriveConfiguredDecoder, deriveConfiguredEncoder}
 
 object domain {
   // Нужно чтобы к классу move можно было добавлять getGame
@@ -36,6 +36,18 @@ object domain {
   sealed trait GameAction
   final case class NewGame(min: Int, max: Int, attemptCount: Int) extends GameAction
   final case class Guess(gameId: GameId, number: Int) extends GameAction
+
+  object GameAction {
+    import io.circe.generic.auto._
+    import io.circe.syntax._
+
+    implicit val encoder: Encoder[GameAction] = Encoder.instance {
+      case newGame @ NewGame(_, _, _) => newGame.asJson
+      case guess @ Guess(_, _) => guess.asJson
+    }
+
+    implicit val decoder: Decoder[GameAction] = Decoder[NewGame].widen or Decoder[Guess].widen
+  }
 
   sealed trait AttemptResult {
     def gameIsFinished: Boolean = this match {
