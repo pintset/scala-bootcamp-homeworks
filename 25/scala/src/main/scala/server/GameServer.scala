@@ -25,7 +25,7 @@ object GameServer {
         def start(min: Int, max: Int, attemptCount: Int): F[GameId] =
           for {
             gameId <- GameId.generate
-            number <- GenInt(min, max).generateInt// min max (max not included)
+            number <- GenInt(min, max).generateInt// min max (max not included) // MinMax.generateInt
             _ <- Console[F].putStrLn(s"Guessed number: $number")
             _ <- gameMapRef.update(_ + (gameId -> Game(number, attemptCount)))
           } yield gameId

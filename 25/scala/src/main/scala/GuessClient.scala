@@ -77,10 +77,10 @@ object GuessClient extends IOApp.Simple {
     // val createGame = botGame22[F] _
     val gameBuilder = consoleGame[F] _
 
-//    http.Client
-//      .resource[F](uri"http://localhost:9001")
-    ws.Client
-      .resource[F](uri"ws://localhost:9001")
+    http.Client
+      .resource[F](uri"http://localhost:9001")
+//    ws.Client
+//      .resource[F](uri"ws://localhost:9001")
       //.resource[F](uri"ws://localhost:9001/game")
       .map(gameBuilder)
       .use { game => settingsService.getSettings >>= game }

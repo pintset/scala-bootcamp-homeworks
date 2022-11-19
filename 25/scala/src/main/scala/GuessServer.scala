@@ -10,7 +10,7 @@ import server.GameServer
 
 object GuessServer extends IOApp.Simple {
   private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] =
-    { http.Routes.routes(gameServer) <+> ws.Routes.routes(gameServer) }.orNotFound
+    { http.Routes(gameServer) <+> ws.Routes(gameServer) }.orNotFound
 
   def run: IO[Unit] =
     GameServer.of[IO].flatMap { gameServer =>

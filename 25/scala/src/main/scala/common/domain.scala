@@ -70,7 +70,6 @@ object domain {
       case GameOver(answer) => s"You lost. Correct answer is $answer"
       case Greater(attemptsLeft) => s"Try to guess lower number. You have $attemptsLeft attempts left"
       case Lower(attemptsLeft) => s"Try to guess greater number. You have $attemptsLeft attempts left"
-      // case GameNotFound(gameId: GameId) => s"Game with id $gameId was not found"
     }
   }
 
@@ -80,5 +79,14 @@ object domain {
   final case class Lower(attemptsLeft: Int) extends AttemptResult
 
   // TODO: Remove GameNotFound from GameResult
+  final case class ErrorResponse(error: String)
+
   final case class GameNotFound(gameId: GameId)
+  object GameNotFound {
+    import io.circe.generic.auto._
+
+    implicit val encoder = Encoder[ErrorResponse].contramap[GameNotFound]{ gameNotFound =>
+      ErrorResponse(s"There is no game with id: ${gameNotFound.gameId.uuid}")
+    }
+  }
 }

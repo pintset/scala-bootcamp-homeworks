@@ -1,7 +1,7 @@
 package ws
 
 import cats.effect.{Concurrent, Sync}
-import common.domain.{GameAction, Guess, NewGame}
+import common.domain.{GameAction, GameNotFound, Guess, NewGame}
 import fs2.Pipe
 import fs2.concurrent.Queue
 import org.http4s.HttpRoutes
@@ -14,13 +14,13 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import io.circe.syntax.EncoderOps
 import effects.Console
-
 import io.circe.generic.auto._
 import org.http4s.circe.CirceEntityCodec._
 import GameAction.decoder
+import GameNotFound.encoder
 
 object Routes {
-  def routes[F[_]: Concurrent](gameService: GameServer[F]): HttpRoutes[F] = {
+  def apply[F[_]: Concurrent](gameService: GameServer[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}
     import dsl._
 
@@ -34,11 +34,15 @@ object Routes {
               for {
                 _ <- Console[F].putStrLn(s"Request: ${decode[GameAction](message)}")
                 gameAction <- Sync[F].fromEither(decode[GameAction](message))
-                responseString <- gameAction match {
-                  case Guess(gameId, number) => gameService.guess(gameId, number).map(_.get.asJson.toString)
-                  case NewGame(min, max, attemptCount) => gameService.start(min, max, attemptCount).map(_.asJson.toString)
+
+                response <- gameAction match {
+                  case Guess(gameId, number) =>
+                    gameService.guess(gameId, number).map(_.fold(GameNotFound(gameId).asJson)(_.asJson))
+
+                  case NewGame(min, max, attemptCount) =>
+                    gameService.start(min, max, attemptCount).map(_.asJson)
                 }
-              } yield WebSocketFrame.Text(responseString)
+              } yield WebSocketFrame.Text(response.toString)
             }
 
         for {

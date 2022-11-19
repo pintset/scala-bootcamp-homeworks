@@ -3,7 +3,7 @@ package ws
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource, Sync}
 import cats.implicits.{catsSyntaxApply, catsSyntaxFunction1FlatMap}
 import org.http4s.Uri
-import common.domain.{AttemptResult, GameAction, GameId, Guess, NewGame}
+import common.domain.{AttemptResult, ErrorResponse, GameAction, GameId, Guess, NewGame}
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import common.Client
@@ -30,7 +30,17 @@ object Client {
       Console[F].putStrLn(s"Request: ${gameAction.asJson.toString}") *> client.send(WSFrame.Text(gameAction.asJson.toString)) *>
         client.receiveStream.collectFirst { case WSFrame.Text(s, _) => s }.compile.string
           .flatTap(s => Console[F].putStrLn(s"Response: $s"))
-          .map(decode[R]).flatMap(Sync[F].fromEither)
+          .map { x =>
+            decode[R](x) match {
+              case err @ Left(error) =>
+                decode[ErrorResponse](x) match {
+                  case Left(_) => err
+                  case Right(responseError) => Left(new Error(responseError.error))
+                }
+              case Right(y) => Right(y)
+            }
+          }
+          .flatMap(Sync[F].fromEither)
     }
 
     settings =>
@@ -42,6 +52,9 @@ object Client {
         // gameIdF - startRequest. Creating game with gameId
         .map { gameIdF =>
           number => gameIdF >>= { gameId => expect[AttemptResult](Guess(gameId, number)) }
+//          number => gameIdF >>= {
+//            gameId => expect[AttemptResult](Guess(GameId(UUID.randomUUID()), number))
+//          }
         }
   }
 

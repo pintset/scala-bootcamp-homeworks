@@ -1,11 +1,12 @@
 package http
 
-import cats.data.Kleisli
+import cats.data.{EitherT, Kleisli}
+import cats.implicits.catsSyntaxApplicativeError
 import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource}
-import cats.implicits.catsSyntaxFunction1FlatMap
+import cats.implicits.{catsSyntaxApplicativeError, catsSyntaxApply, catsSyntaxFunction1FlatMap, toBifunctorOps}
 import org.http4s.Uri
 import org.http4s.client.dsl.Http4sClientDsl
-import common.domain.{AttemptResult, GameId, Guess, NewGame}
+import common.domain.{AttemptResult, ErrorResponse, GameId, Guess, NewGame}
 import org.http4s._
 import io.circe.generic.auto._
 import org.http4s.circe.CirceEntityCodec._
@@ -15,7 +16,9 @@ import common.Client
 import common.domain.GameId.decoder
 import common.domain.AttemptResult.codec
 import org.http4s.client.blaze.BlazeClientBuilder
+import effects.Console
 
+import java.util.UUID
 import scala.concurrent.ExecutionContext
 
 // (Int => F[AttemptResult]) = Client[F]
@@ -63,7 +66,16 @@ object Client {
         .flatMap(client.expect[GameId])
         .memoize
         .map { gameIdF =>
-          number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
+          //number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
+          number => gameIdF >>= guessRequest(number) >>= { request =>
+          // number => gameIdF >>= { _ => guessRequest(number)(GameId(UUID.randomUUID())) } >>= { request =>
+            client.run(request).use { response =>
+              response.attemptAs[AttemptResult].leftWiden[Throwable].leftSemiflatMap { failure =>
+                  response.attemptAs[ErrorResponse]
+                    .leftWiden[Throwable].fold(_ => failure, er => new Error(er.error))
+              }.rethrowT
+            }
+          }
         }
 
 //    startRequest _
@@ -78,7 +90,7 @@ object Client {
 
   def resource[F[_]: Concurrent: ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
     BlazeClientBuilder[F](ExecutionContext.global).resource
-      .map { org.http4s.client.middleware.Logger(logHeaders = false, logBody = true) }
+      // .map { org.http4s.client.middleware.Logger(logHeaders = false, logBody = true) }
       .map { client => Client[F](client, host) }
 
   //  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =

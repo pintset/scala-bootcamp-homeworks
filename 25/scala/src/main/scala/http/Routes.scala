@@ -10,9 +10,10 @@ import cats.syntax.flatMap._
 import org.http4s.dsl.Http4sDsl
 import common.domain.GameId.encoder
 import common.domain.AttemptResult.codec
+import common.domain.GameNotFound.encoder
 
 object Routes {
-  def routes[F[_]: Sync](gameService: GameServer[F]): HttpRoutes[F] = {
+  def apply[F[_]: Sync](gameService: GameServer[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}
     import dsl._
 
