@@ -16,7 +16,7 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic" % CirceVersion,
       "io.circe" %% "circe-parser" % CirceVersion,
       "io.circe" %% "circe-generic-extras" % CirceVersion,
-      // "ch.qos.logback" % "logback-classic" % "1.4.4"
+      "ch.qos.logback" % "logback-classic" % "1.4.4"
     ),
 
     addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full)

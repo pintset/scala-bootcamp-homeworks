@@ -14,9 +14,9 @@ object domain {
   // Нужно чтобы к классу move можно было добавлять getGame
   final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
 
-  final case class Game(guessedNumber: Int, attemptsLeft: Int) {
+  final case class Game(guessedNumber: Int, attemptCount: Int, attemptsLeft: Int) {
     def result(guess: Int): AttemptResult =
-      if (guessedNumber == guess) YouWon(attemptsLeft, guessedNumber)
+      if (guessedNumber == guess) YouWon(attemptCount - attemptsLeft, guessedNumber)
       else if (attemptsLeft == 0) GameOver(guessedNumber)
       else if (guess > guessedNumber) Greater(attemptsLeft)
       else Lower(attemptsLeft)
@@ -35,7 +35,7 @@ object domain {
 
   sealed trait GameAction
   final case class NewGame(min: Int, max: Int, attemptCount: Int) extends GameAction
-  final case class Guess(gameId: GameId, number: Int) extends GameAction
+  final case class Guess(gameId: GameId, guess: Int) extends GameAction
 
   object GameAction {
     import io.circe.generic.auto._
@@ -66,14 +66,14 @@ object domain {
   // TODO: Fix attempts in YouWon
   implicit val gameResultShow = new Show[AttemptResult] {
     def show(t: AttemptResult): String = t match {
-      case YouWon(usedAttempts, guess) => s"You won. You used $usedAttempts attempts to guess number $guess"
+      case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempts to guess number $guess"
       case GameOver(answer) => s"You lost. Correct answer is $answer"
       case Greater(attemptsLeft) => s"Try to guess lower number. You have $attemptsLeft attempts left"
       case Lower(attemptsLeft) => s"Try to guess greater number. You have $attemptsLeft attempts left"
     }
   }
 
-  final case class YouWon(usedAttempts: Int, guess: Int) extends AttemptResult
+  final case class YouWon(attemptsUsed: Int, guess: Int) extends AttemptResult
   final case class GameOver(answer: Int) extends AttemptResult
   final case class Greater(attemptsLeft: Int) extends AttemptResult
   final case class Lower(attemptsLeft: Int) extends AttemptResult

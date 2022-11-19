@@ -23,7 +23,7 @@ object Routes {
           .as[Guess]
           .flatMap { guess =>
             gameService
-              .guess(guess.gameId, guess.number)
+              .guess(guess.gameId, guess.guess)
               .flatMap(_.fold(NotFound(GameNotFound(guess.gameId)))(Ok(_)))
           }
 
