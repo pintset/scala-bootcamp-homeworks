@@ -6,7 +6,7 @@ import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource}
 import cats.implicits.{catsSyntaxApplicativeError, catsSyntaxApply, catsSyntaxFunction1FlatMap, toBifunctorOps}
 import org.http4s.Uri
 import org.http4s.client.dsl.Http4sClientDsl
-import common.domain.{AttemptResult, ErrorResponse, GameId, Guess, NewGame}
+import common.domain.{AttemptResult, ErrorResponse, GameAction, GameId, Guess, NewGame}
 import org.http4s._
 import io.circe.generic.auto._
 import org.http4s.circe.CirceEntityCodec._
@@ -20,6 +20,8 @@ import effects.Console
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext
+import GameAction.encoder
+import io.circe.Decoder
 
 // (Int => F[AttemptResult]) = Client[F]
 
@@ -46,6 +48,14 @@ object Client {
       def memoize: F[F[A]] = Concurrent.memoize(fa)
     }
 
+    def expect[R: Decoder](request: Request[F]): F[R] =
+      client.run(request).use { response =>
+        response.attemptAs[R].leftWiden[Throwable].leftSemiflatMap { failure =>
+          response.attemptAs[ErrorResponse]
+            .leftWiden[Throwable].fold(_ => failure, er => new Error(er.error))
+        }.rethrowT
+      }
+
 //    startRequest >=> client.expect[GameId] andThen Concurrent.memoize andThen { gameIdFF =>
 //      gameIdFF.map { gameIdF =>
 //        number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
@@ -63,19 +73,12 @@ object Client {
     // Только там и там вызов клиента будет фактически частьюп
     settings =>
       startRequest(settings)
-        .flatMap(client.expect[GameId])
+        .flatMap(expect[GameId])
         .memoize
         .map { gameIdF =>
           //number => gameIdF >>= guessRequest(number) >>= client.expect[AttemptResult]
-          number => gameIdF >>= guessRequest(number) >>= { request =>
-          // number => gameIdF >>= { _ => guessRequest(number)(GameId(UUID.randomUUID())) } >>= { request =>
-            client.run(request).use { response =>
-              response.attemptAs[AttemptResult].leftWiden[Throwable].leftSemiflatMap { failure =>
-                  response.attemptAs[ErrorResponse]
-                    .leftWiden[Throwable].fold(_ => failure, er => new Error(er.error))
-              }.rethrowT
-            }
-          }
+          //number => gameIdF >>= { _ => guessRequest(number)(GameId(UUID.randomUUID())) } >>= expect[AttemptResult]
+          number => gameIdF >>= guessRequest(number) >>= expect[AttemptResult]
         }
 
 //    startRequest _
