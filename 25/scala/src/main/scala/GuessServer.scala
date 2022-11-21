@@ -1,6 +1,6 @@
 import cats.effect.{Concurrent, IO, IOApp}
 import cats.implicits.toSemigroupKOps
-// import cats.implicits.toSemigroupKOps
+import server.routes
 import org.http4s.HttpApp
 
 import scala.concurrent.ExecutionContext
@@ -10,7 +10,7 @@ import server.GameServer
 
 object GuessServer extends IOApp.Simple {
   private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] =
-    { http.Routes(gameServer) <+> ws.Routes(gameServer) }.orNotFound
+    { routes.Http(gameServer) <+> routes.Ws(gameServer) }.orNotFound
 
   def run: IO[Unit] =
     GameServer.of[IO].flatMap { gameServer =>

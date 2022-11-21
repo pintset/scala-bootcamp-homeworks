@@ -1,43 +1,41 @@
-package ws
+package client.clients
 
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, Resource, Sync}
-import cats.implicits.{catsSyntaxApply, catsSyntaxFunction1FlatMap}
-import org.http4s.Uri
-import common.domain.{AttemptResult, ErrorResponse, GameAction, GameId, Guess, NewGame}
-import cats.syntax.functor._
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.implicits.catsSyntaxApply
 import cats.syntax.flatMap._
-import common.Client
-import io.circe.syntax.EncoderOps
-import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.client.jdkhttpclient.{JdkWSClient, WSClient, WSConnectionHighLevel, WSFrame, WSRequest}
-import io.circe.parser._
-import io.circe.generic.auto._
-
-import scala.concurrent.ExecutionContext
+import cats.syntax.functor._
+import common.domain.{AttemptResult, ErrorResponse, GameAction, GameId, Guess, NewGame}
 import effects.Console
 import io.circe.Decoder
+import io.circe.generic.auto._
+import io.circe.parser._
+import org.http4s.Uri
+import org.http4s.client.jdkhttpclient.{JdkWSClient, WSConnectionHighLevel, WSFrame, WSRequest}
+import io.circe.syntax.EncoderOps
 import GameAction.encoder
-
-import java.util.UUID
+import GameId.decoder
+import AttemptResult.codec
+import client.types.Client
 
 // (Int => F[AttemptResult]) = Client[F]
 
 // Это Guess
 // Его можно сделать консольным добавив в конце вывод результата если надо
-object Client {
+object WsClient {
   def apply[F[_]: Concurrent : ContextShift : ConcurrentEffect](client: WSConnectionHighLevel[F], host: Uri): NewGame => F[Client[F]] = {
+    //    def myDecode[R: Decoder](input: String): Either[Throwable, R] =
+    //      parse(input) match {
+    //        case Right(json) => Decoder[R].decodeJson(json)
+    //        case _ => Left(new Error("The request body was malformed."))
+    //      }
+
     def expect[R: Decoder](gameAction: GameAction): F[R] = {
       Console[F].putStrLn(s"Request: ${gameAction.asJson.toString}") *> client.send(WSFrame.Text(gameAction.asJson.toString)) *>
         client.receiveStream.collectFirst { case WSFrame.Text(s, _) => s }.compile.string
           .flatTap(s => Console[F].putStrLn(s"Response: $s"))
-          .map { x =>
-            decode[R](x) match {
-              case err @ Left(error) =>
-                decode[ErrorResponse](x) match {
-                  case Left(_) => err
-                  case Right(responseError) => Left(new Error(responseError.error))
-                }
-              case Right(y) => Right(y)
+          .map { input =>
+            decode[R](input).left.map { err =>
+              decode[ErrorResponse](input).fold(_ => err, re => new Error(re.error))
             }
           }
           .flatMap(Sync[F].fromEither)
@@ -52,9 +50,9 @@ object Client {
         // gameIdF - startRequest. Creating game with gameId
         .map { gameIdF =>
           number => gameIdF >>= { gameId => expect[AttemptResult](Guess(gameId, number)) }
-//          number => gameIdF >>= {
-//            gameId => expect[AttemptResult](Guess(GameId(UUID.randomUUID()), number))
-//          }
+          //          number => gameIdF >>= {
+          //            gameId => expect[AttemptResult](Guess(GameId(UUID.randomUUID()), number))
+          //          }
         }
   }
 

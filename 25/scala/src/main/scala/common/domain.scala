@@ -1,36 +1,19 @@
 package common
 
-import cats.Show
-import cats.effect.Sync
-import effects.GenUUID
-
-import java.util.UUID
 import cats.syntax.functor._
 import io.circe.{Codec, Decoder, Encoder}
-import io.circe.generic.extras.Configuration
-import io.circe.generic.extras.semiauto.{deriveConfiguredCodec, deriveConfiguredDecoder, deriveConfiguredEncoder}
+import java.util.UUID
 
 object domain {
-  // Нужно чтобы к классу move можно было добавлять getGame
-  final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
-
-  final case class Game(guessedNumber: Int, attemptCount: Int, attemptsLeft: Int) {
-    def result(guess: Int): AttemptResult =
-      if (guessedNumber == guess) YouWon(attemptCount - attemptsLeft, guessedNumber)
-      else if (attemptsLeft == 0) GameOver(guessedNumber)
-      else if (guess > guessedNumber) Greater(attemptsLeft)
-      else Lower(attemptsLeft)
-
-//    def isOver(guess: Int): Boolean =
-//      attemptsLeft == 0 || guessedNumber == guess
-  }
-
   final case class GameId(uuid: UUID) extends AnyVal
   object GameId {
+    import cats.effect.Sync
+    import effects.GenUUID
+
     implicit val encoder: Encoder[GameId] = Encoder[UUID].contramap[GameId](gameId => gameId.uuid)
     implicit val decoder: Decoder[GameId] = Decoder[UUID].map(uuid => GameId(uuid))
 
-    def generate[F[_]: Sync]: F[GameId] = GenUUID[F].createUUID.map(GameId(_))
+    def generate[F[_] : Sync]: F[GameId] = GenUUID[F].createUUID.map(GameId(_))
   }
 
   sealed trait GameAction
@@ -42,13 +25,14 @@ object domain {
     import io.circe.syntax._
 
     implicit val encoder: Encoder[GameAction] = Encoder.instance {
-      case newGame @ NewGame(_, _, _) => newGame.asJson
-      case guess @ Guess(_, _) => guess.asJson
+      case newGame@NewGame(_, _, _) => newGame.asJson
+      case guess@Guess(_, _) => guess.asJson
     }
 
     implicit val decoder: Decoder[GameAction] = Decoder[NewGame].widen or Decoder[Guess].widen
   }
 
+  // TODO: Potentially rename, add some additional methods
   sealed trait AttemptResult {
     def gameIsFinished: Boolean = this match {
       case YouWon(_, _) | GameOver(_) => true
@@ -57,6 +41,9 @@ object domain {
   }
 
   object AttemptResult {
+    import io.circe.generic.extras.Configuration
+    import io.circe.generic.extras.semiauto.deriveConfiguredCodec
+
     implicit val genDevConfig: Configuration =
       Configuration.default.withDiscriminator("attemptResult")
 
@@ -64,6 +51,7 @@ object domain {
   }
 
   // TODO: Fix attempts in YouWon
+  import cats.Show
   implicit val gameResultShow = new Show[AttemptResult] {
     def show(t: AttemptResult): String = t match {
       case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempts to guess number $guess"
@@ -78,14 +66,15 @@ object domain {
   final case class Greater(attemptsLeft: Int) extends AttemptResult
   final case class Lower(attemptsLeft: Int) extends AttemptResult
 
-  // TODO: Remove GameNotFound from GameResult
+  // Server side only (ws routes & http routes)
   final case class ErrorResponse(error: String)
 
   final case class GameNotFound(gameId: GameId)
   object GameNotFound {
+
     import io.circe.generic.auto._
 
-    implicit val encoder = Encoder[ErrorResponse].contramap[GameNotFound]{ gameNotFound =>
+    implicit val encoder = Encoder[ErrorResponse].contramap[GameNotFound] { gameNotFound =>
       ErrorResponse(s"There is no game with id: ${gameNotFound.gameId.uuid}")
     }
   }

@@ -1,9 +1,10 @@
-package common
+package client.strategies
 
 import cats.Applicative
 import cats.data.StateT
-import cats.implicits.toFunctorOps
-import common.domain.{AttemptResult, Greater, Lower, Move}
+import common.domain.{AttemptResult, Greater, Lower}
+import cats.syntax.functor._
+import client.types.{GameStrategy, Move}
 
 object BotStrategy {
   final case class MoveState(min: Int, max: Int, attemptResultOpt: Option[AttemptResult])
@@ -14,15 +15,15 @@ object BotStrategy {
     def nextMinMax(prev: MoveState): MoveState =
       prev.attemptResultOpt.map {
         case Greater(_) => prev.copy(max = strategy(prev.min, prev.max))
-        case Lower(_)   => prev.copy(min = strategy(prev.min, prev.max))
-        case _          => prev
+        case Lower(_) => prev.copy(min = strategy(prev.min, prev.max))
+        case _ => prev
       }.getOrElse(prev)
 
     StateT
       .modify(nextMinMax)
       .inspect(s => strategy(s.min, s.max))
   }
-  
+
   def move[F[_] : Applicative](guess: Int => F[AttemptResult]): Move[StateT[F, MoveState, *]] = {
     // F[_] ~> G[_] where G[A] = Move[StateT[F, MoveState, A]]
     val liftedGuess =
