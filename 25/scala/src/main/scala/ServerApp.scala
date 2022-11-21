@@ -8,7 +8,7 @@ import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
 import org.http4s.server.blaze.BlazeServerBuilder
 import server.GameServer
 
-object GuessServer extends IOApp.Simple {
+object ServerApp extends IOApp.Simple {
   private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] =
     { routes.Http(gameServer) <+> routes.Ws(gameServer) }.orNotFound
 

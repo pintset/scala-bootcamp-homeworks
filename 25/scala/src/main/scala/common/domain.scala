@@ -66,12 +66,10 @@ object domain {
   final case class Greater(attemptsLeft: Int) extends AttemptResult
   final case class Lower(attemptsLeft: Int) extends AttemptResult
 
-  // Server side only (ws routes & http routes)
   final case class ErrorResponse(error: String)
 
   final case class GameNotFound(gameId: GameId)
   object GameNotFound {
-
     import io.circe.generic.auto._
 
     implicit val encoder = Encoder[ErrorResponse].contramap[GameNotFound] { gameNotFound =>

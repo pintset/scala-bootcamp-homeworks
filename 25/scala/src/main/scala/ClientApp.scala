@@ -13,7 +13,7 @@ import client.strategies.{BotStrategy, ConsoleStrategy}
 import client.types.{Client, Game, Move}
 import common.domain.{AttemptResult, NewGame}
 
-object GuessClient extends IOApp.Simple {
+object ClientApp extends IOApp.Simple {
   def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
     val getNext = Console[F].putStr("Enter your guess: ") >> move.getNext
 

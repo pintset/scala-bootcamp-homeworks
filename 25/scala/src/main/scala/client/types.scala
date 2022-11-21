@@ -14,5 +14,5 @@ object types {
   // type GameStrategy[F[_]] = Kleisli[F, Option[AttemptResult], Int]
 
   type Game[F[_]] = NewGame => F[AttemptResult]
-  // type TheGame[F[_]] = Kleisli[F, NewGame, AttemptResult]
+  // type Game[F[_]] = Kleisli[F, NewGame, AttemptResult]
 }

@@ -6,13 +6,11 @@ import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import server.GameServer
 import io.circe.generic.auto._
-
 import cats.syntax.flatMap._
-
 import org.http4s.circe.CirceEntityCodec._
 import common.domain.GameId.encoder
 import common.domain.AttemptResult.codec
-import common.domain.GameNotFound.encoder
+import GameNotFound.encoder
 
 object Http {
   def apply[F[_] : Sync](gameService: GameServer[F]): HttpRoutes[F] = {
