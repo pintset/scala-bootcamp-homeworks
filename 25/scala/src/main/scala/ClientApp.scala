@@ -41,7 +41,7 @@ object ClientApp extends IOApp.Simple {
   //    guessF.map {
   //      _
   //        .map(ConsoleStrategy.move[F] _ andThen decorateMove[F])
-  //        .flatMap(genGame22[F])
+  //        .flatMap(gameLoop[F])
   //    }
 
   def botGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
@@ -62,9 +62,6 @@ object ClientApp extends IOApp.Simple {
       .map(BotStrategy.move[F])
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
 
-  // Сколько параметров будет?
-  // хост(ip и порт), клиентбилдер (хттп или ws), провайдер игровых сеттингов, гейм билдер на их основе.
-  // То что вверху и есть цепочка. Так надо и написать
   def program[F[_] : Concurrent : ContextShift : ConcurrentEffect] = {
     val settingsService = SettingsService[F]
     // val settingsService = SettingsService.console

@@ -35,12 +35,12 @@ object GameServer {
         def start(min: Int, max: Int, attemptCount: Int): F[GameId] =
           for {
             gameId <- GameId.generate
-            number <- GenInt(min, max).generateInt// min max (max not included) // MinMax.generateInt
+            number <- GenInt(min, max).generateInt // min max (max not included) // MinMax.generateInt
             _ <- Console[F].putStrLn(s"Guessed number: $number")
             _ <- gameMapRef.update(_ + (gameId -> Game(number, attemptCount, attemptCount)))
           } yield gameId
 
-        def guess(gameId: GameId, number: Int): F[Option[AttemptResult]] = {
+        def guess(gameId: GameId, number: Int): F[Option[AttemptResult]] =
           gameMapRef.modifyMaybe { games =>
             games.get(gameId).map { game =>
               val newGame = game.copy(attemptsLeft = game.attemptsLeft - 1)
@@ -52,7 +52,6 @@ object GameServer {
                 (games + (gameId -> newGame), gameResult)
             }
           }
-        }
       }
     }
   }

@@ -25,7 +25,7 @@ object BotStrategy {
   }
 
   def move[F[_] : Applicative](guess: Int => F[AttemptResult]): Move[StateT[F, MoveState, *]] = {
-    // F[_] ~> G[_] where G[A] = Move[StateT[F, MoveState, A]]
+    // F[_] ~> G[_] where G[A] = StateT[F, MoveState, A]
     val liftedGuess =
       guess.map { fa => StateT { move: MoveState => fa.map { a => (move.copy(attemptResultOpt = Option(a)), a) } } }
 
