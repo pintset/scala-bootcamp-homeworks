@@ -1,4 +1,4 @@
-package client.clients
+package client.services
 
 import cats.effect.{Concurrent, ConcurrentEffect, Resource}
 import common.domain.{AttemptResult, ErrorResponse, GameId, Guess, NewGame}
@@ -13,14 +13,15 @@ import io.circe.generic.auto._
 import org.http4s.circe.CirceEntityCodec._
 import GameId.decoder
 import AttemptResult.codec
-import client.types.Client
+import client.{GameClient, GameService}
+import client.types.GameClient
 
 import scala.concurrent.ExecutionContext
 
 // Это Guess
 // Его можно сделать консольным добавив в конце вывод результата если надо
-object HttpApi {
-  def apply[F[_] : Concurrent](client: org.http4s.client.Client[F], host: Uri): Api[F] = {
+object Http {
+  def apply[F[_] : Concurrent](client: org.http4s.client.Client[F], host: Uri): GameService[F] = {
     val dsl = new Http4sClientDsl[F] {}
     import dsl._
 
@@ -34,7 +35,7 @@ object HttpApi {
         }.rethrowT
       }
 
-    new Api[F] {
+    new GameService[F] {
       def start(settings: NewGame): F[GameId] =
         Method.POST(settings, host / "start") >>= expect[GameId]
 
@@ -43,19 +44,19 @@ object HttpApi {
     }
   }
 
-  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
+  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, GameService[F]] =
     BlazeClientBuilder[F](ExecutionContext.global).resource
       .map {
         org.http4s.client.middleware.Logger(logHeaders = false, logBody = true)
       }
-      .map { client => CreateClient(HttpApi(client, host)) }
+      .map { client => apply(client, host) }
 
-//  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
-//    BlazeClientBuilder[F](ExecutionContext.global).resource
-//      .map {
-//        org.http4s.client.middleware.Logger(logHeaders = false, logBody = true)
-//      }
-//      .map { client => apply(client, host) }
+  //  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
+  //    BlazeClientBuilder[F](ExecutionContext.global).resource
+  //      .map {
+  //        org.http4s.client.middleware.Logger(logHeaders = false, logBody = true)
+  //      }
+  //      .map { client => apply(client, host) }
 
   //  def resource[F[_] : Concurrent : ConcurrentEffect](host: Uri): Resource[F, NewGame => F[Client[F]]] =
   //    BlazeClientBuilder[F](ExecutionContext.global).resource.map { client => Client[F](client, host) }

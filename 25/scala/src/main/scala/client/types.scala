@@ -6,8 +6,8 @@ object types {
   final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
 
   // guess
-  type Client[F[_]] = Int => F[AttemptResult]
-  // type Client[F[_]] = Kleisli[F, Int, AttemptResult]
+  type GameClient[F[_]] = Int => F[AttemptResult]
+  // type GameClient[F[_]] = Kleisli[F, Int, AttemptResult]
 
   // getNext (F[Int] in particular)
   type GameStrategy[F[_]] = F[Int]

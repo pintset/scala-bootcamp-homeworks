@@ -7,10 +7,10 @@ import effects.Console
 import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import client.clients._
+import client._
 import client.strategies.BotStrategy.MoveState
 import client.strategies.{BotStrategy, ConsoleStrategy}
-import client.types.{Client, Game, Move}
+import client.types.{GameClient, Game, Move}
 import common.domain.{AttemptResult, NewGame}
 
 object ClientApp extends IOApp.Simple {
@@ -35,7 +35,7 @@ object ClientApp extends IOApp.Simple {
     loop
   }
 
-  def consoleGame[F[_] : Sync](guessF: NewGame => F[Client[F]]): Game[F] =
+  def consoleGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map(gameLoop[F])
 
   //    guessF.map {
@@ -44,7 +44,7 @@ object ClientApp extends IOApp.Simple {
   //        .flatMap(genGame22[F])
   //    }
 
-  def botGame[F[_] : Sync](guessF: NewGame => F[Client[F]]): Game[F] = settings =>
+  def botGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
     guessF(settings)
       .map(BotStrategy.move[F] _ andThen decorateMove[StateT[F, MoveState, *]])
       .flatMap { move =>
@@ -54,10 +54,10 @@ object ClientApp extends IOApp.Simple {
         gameLoop(m).runA(MoveState(settings.min, settings.max, None))
       }
 
-  def consoleGamePure[F[_] : Sync](guessF: NewGame => F[Client[F]]): Game[F] =
+  def consoleGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _).map(gameLoop[F])
 
-  def botGamePure[F[_] : Sync](guessF: NewGame => F[Client[F]]): Game[F] = settings =>
+  def botGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
     guessF(settings)
       .map(BotStrategy.move[F])
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
@@ -72,8 +72,9 @@ object ClientApp extends IOApp.Simple {
     val gameBuilder = consoleGame[F] _
 
     // HttpClient.resource[F](uri"http://localhost:9001")
-    WsClient.resource[F](uri"ws://localhost:9001")
-      .map(gameBuilder)
+    services.Http.resource[F](uri"http://localhost:9001")
+    //services.Ws.resource[F](uri"ws://localhost:9001")
+      .map { GameClient[F] _ andThen gameBuilder }
       .use { game => settingsService.getSettings >>= game }
       .void
   }
