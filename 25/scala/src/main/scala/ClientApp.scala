@@ -7,6 +7,7 @@ import effects.Console
 import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
+import cats.syntax.applicativeError._
 import client._
 import client.strategies.BotStrategy.MoveState
 import client.strategies.{BotStrategy, ConsoleStrategy}
@@ -15,7 +16,10 @@ import common.domain.{AttemptResult, NewGame}
 
 object ClientApp extends IOApp.Simple {
   def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
-    val getNext = Console[F].putStr("Enter your guess: ") >> move.getNext
+    def getNext: F[Int] =
+      Console[F].putStr("Enter your guess: ") >> move.getNext.handleErrorWith { _ =>
+        Console[F].putStrLn("Failed to parse your input. Please try again") >> getNext
+      }
 
     val show = common.domain.gameResultShow.show _
     val guess = move.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
