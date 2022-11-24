@@ -1,4 +1,4 @@
-## 17.  Asynchronous Programming - JVM threads, Futures & Promises, synchronized, Atomic*
+## 17.  Asynchronous Programming - JVM threads, Futures & Promises, synchronized, Atomic
 
 Application:
 
