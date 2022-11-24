@@ -8,11 +8,13 @@ import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import cats.syntax.applicativeError._
+import ch.qos.logback.classic.LoggerContext
 import client._
 import client.strategies.BotStrategy.MoveState
 import client.strategies.{BotStrategy, ConsoleStrategy}
-import client.types.{GameClient, Game, Move}
+import client.types.{Game, GameClient, Move}
 import common.domain.{AttemptResult, NewGame}
+import org.slf4j.LoggerFactory
 
 object ClientApp extends IOApp.Simple {
   def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
@@ -61,9 +63,9 @@ object ClientApp extends IOApp.Simple {
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
 
   def program[F[_] : Concurrent : ContextShift : ConcurrentEffect]: F[Unit] = {
-    val settingsService = SettingsService[F]
-    // val settingsService = SettingsService.console
-    // val gameBuilder = botGame22[F] _
+    // val settingsService = SettingsService[F]
+    val settingsService = SettingsService.console
+    // val gameBuilder = botGame[F] _
     val gameBuilder = consoleGame[F] _
 
     services.Http.resource[F](uri"http://localhost:9001")
@@ -73,5 +75,8 @@ object ClientApp extends IOApp.Simple {
       .void
   }
 
-  def run: IO[Unit] = program[IO]
+  def run: IO[Unit] = {
+    LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext].stop()
+    program[IO]
+  }
 }

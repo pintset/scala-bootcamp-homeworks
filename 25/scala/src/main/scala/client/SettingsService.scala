@@ -12,14 +12,14 @@ trait SettingsService[F[_]] {
 
 object SettingsService {
   def apply[F[_]: Applicative]: SettingsService[F] = new SettingsService[F] {
-    def getSettings: F[NewGame] = Applicative[F].pure(NewGame(10, 100, 5))
+    def getSettings: F[NewGame] = Applicative[F].pure(NewGame(0, 100, 5))
   }
 
   def console[F[_] : Sync]: SettingsService[F] = new SettingsService[F] {
     def getSettings: F[NewGame] = {
-      (Console.inputInt("Enter min number: "),
-        Console.inputInt("Enter max number: "),
-        Console.inputInt("Enter number of attempts: "))
+      (Console.inputIntWithRetry("Enter min number: "),
+        Console.inputIntWithRetry("Enter max number: "),
+        Console.inputIntWithRetry("Enter number of attempts: "))
         .mapN { (min, max, attemptCount) => NewGame(min, max, attemptCount) }
     }
   }

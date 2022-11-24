@@ -2,6 +2,7 @@ package effects
 
 import cats.effect.Sync
 import cats.implicits.catsSyntaxFlatMapOps
+import cats.syntax.applicativeError._
 
 import scala.io.StdIn
 
@@ -21,4 +22,9 @@ object Console {
 
   def inputInt[F[_]: Sync](message: String): F[Int] =
     Console[F].putStr(message) >> Console[F].getInt
+
+  def inputIntWithRetry[F[_] : Sync](message: String): F[Int] =
+    inputInt(message).handleErrorWith { _ =>
+      Console[F].putStrLn("Failed to parse your input. Please try again") >> inputIntWithRetry(message)
+    }
 }
