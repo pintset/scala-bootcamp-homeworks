@@ -14,8 +14,8 @@ object BotStrategy {
 
     def nextMinMax(prev: MoveState): MoveState =
       prev.attemptResultOpt.map {
-        case Greater(_) => prev.copy(max = strategy(prev.min, prev.max))
-        case Lower(_) => prev.copy(min = strategy(prev.min, prev.max))
+        case Greater(_) => prev.copy(max = strategy(prev.min, prev.max) - 1)
+        case Lower(_) => prev.copy(min = strategy(prev.min, prev.max) + 1)
         case _ => prev
       }.getOrElse(prev)
 

@@ -26,8 +26,6 @@ object Ws {
     import dsl._
 
     HttpRoutes.of[F] {
-      // TODO: "game" in path here. Maybe can be removed
-      // case GET -> Root / "game" =>
       case GET -> Root =>
         val gamePipe: Pipe[F, WebSocketFrame, WebSocketFrame] =
           _.evalMap {

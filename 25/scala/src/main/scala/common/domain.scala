@@ -32,7 +32,6 @@ object domain {
     implicit val decoder: Decoder[GameAction] = Decoder[NewGame].widen or Decoder[Guess].widen
   }
 
-  // TODO: Potentially rename, add some additional methods
   sealed trait AttemptResult {
     def gameIsFinished: Boolean = this match {
       case YouWon(_, _) | GameOver(_) => true
@@ -50,11 +49,10 @@ object domain {
     implicit val codec: Codec[AttemptResult] = deriveConfiguredCodec[AttemptResult]
   }
 
-  // TODO: Fix attempts in YouWon
   import cats.Show
   implicit val gameResultShow = new Show[AttemptResult] {
     def show(t: AttemptResult): String = t match {
-      case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempts to guess number $guess"
+      case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempts to guess $guess"
       case GameOver(answer) => s"You lost. Correct answer is $answer"
       case Greater(attemptsLeft) => s"Try to guess lower number. You have $attemptsLeft attempts left"
       case Lower(attemptsLeft) => s"Try to guess greater number. You have $attemptsLeft attempts left"

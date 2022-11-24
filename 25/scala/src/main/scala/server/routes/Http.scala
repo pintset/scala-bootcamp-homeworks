@@ -27,7 +27,7 @@ object Http {
               .flatMap(_.fold(NotFound(GameNotFound(guess.gameId)))(Ok(_)))
           }
 
-      case req@POST -> Root / "start" =>
+      case req @ POST -> Root / "start" =>
         req
           .as[NewGame]
           .flatMap { newGame => gameService.start(newGame.min, newGame.max, newGame.attemptCount) }

@@ -19,8 +19,6 @@ object Console {
     def putStrLn(message: String): F[Unit] = Sync[F].delay(println(message))
   }
 
-
-  // TODO: Validation
   def inputInt[F[_]: Sync](message: String): F[Int] =
     Console[F].putStr(message) >> Console[F].getInt
 }

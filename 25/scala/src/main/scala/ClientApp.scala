@@ -42,12 +42,6 @@ object ClientApp extends IOApp.Simple {
   def consoleGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map(gameLoop[F])
 
-  //    guessF.map {
-  //      _
-  //        .map(ConsoleStrategy.move[F] _ andThen decorateMove[F])
-  //        .flatMap(gameLoop[F])
-  //    }
-
   def botGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
     guessF(settings)
       .map(BotStrategy.move[F] _ andThen decorateMove[StateT[F, MoveState, *]])
@@ -66,15 +60,14 @@ object ClientApp extends IOApp.Simple {
       .map(BotStrategy.move[F])
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
 
-  def program[F[_] : Concurrent : ContextShift : ConcurrentEffect] = {
+  def program[F[_] : Concurrent : ContextShift : ConcurrentEffect]: F[Unit] = {
     val settingsService = SettingsService[F]
     // val settingsService = SettingsService.console
-    // val createGame = botGame22[F] _
+    // val gameBuilder = botGame22[F] _
     val gameBuilder = consoleGame[F] _
 
-    // HttpClient.resource[F](uri"http://localhost:9001")
     services.Http.resource[F](uri"http://localhost:9001")
-    //services.Ws.resource[F](uri"ws://localhost:9001")
+    // services.Ws.resource[F](uri"ws://localhost:9001")
       .map { GameClient[F] _ andThen gameBuilder }
       .use { game => settingsService.getSettings >>= game }
       .void
