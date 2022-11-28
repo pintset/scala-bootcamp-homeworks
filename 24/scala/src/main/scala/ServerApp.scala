@@ -10,6 +10,7 @@ import cats.syntax.functor._
 import io.circe.{Decoder, Encoder}
 import org.http4s.HttpApp
 import org.http4s.server.websocket.WebSocketBuilder2
+import fs2.io.file._
 
 import scala.util.Random
 
@@ -17,16 +18,30 @@ object ServerApp extends IOApp.Simple {
   def httpApp[F[_]: Async, A: Encoder: Decoder](gameServer: GameServer[F, A])(builder: WebSocketBuilder2[F]): HttpApp[F] =
     (routes.Http(gameServer) <+> routes.Ws(gameServer, builder)).orNotFound
 
-  def getNextGuess[F[_] : Sync]: F[String] = {
-    val words = Array(
-      "вихрь",
-      "почта",
-      "тембр"
-    )
+  def getNextGuess[F[_]: Sync: Files]: F[String] = {
+    val filePath = Path("words.txt")
 
-    Sync[F].delay(Random.between(0, words.length))
-      .map(words)
-      .flatTap(guess => Sync[F].delay(println(s"Guess: $guess")))
+    Files[F].size(filePath)
+      .map { size => math.ceil(size / 12.0).toInt }
+      .flatMap { wordCount => Sync[F].delay(Random.between(0, wordCount)) }
+      .flatMap { wordNumber =>
+        Files[F].readUtf8Lines(filePath)
+          .drop(wordNumber - 1)
+          .take(1)
+          .compile
+          .lastOrError
+      }
+      .flatTap { guess => Sync[F].delay(println(s"Guess: $guess")) }
+
+//    val words = Array(
+//      "вихрь",
+//      "почта",
+//      "тембр"
+//    )
+//
+//    Sync[F].delay(Random.between(0, words.length))
+//      .map(words)
+//      .flatTap(guess => Sync[F].delay(println(s"Guess: $guess")))
   }
 
   def program[F[_] : Async, A: Encoder: Decoder](gameServer: GameServer[F, A]): F[Nothing] =
