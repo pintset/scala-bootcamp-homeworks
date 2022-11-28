@@ -6,6 +6,6 @@ import client.types.{GameStrategy, Move}
 import common.domain.AttemptResult
 
 object ConsoleStrategy {
-  def apply[F[_]: Sync: Console]: GameStrategy[F] = common.Console.readInt
-  def move[F[_]: Sync: Console](guess: Int => F[AttemptResult]): Move[F] = Move(ConsoleStrategy[F], guess)
+  def apply[F[_]: Sync: Console]: GameStrategy[F, String] = Console[F].readLine
+  def move[F[_]: Sync: Console](guess: String => F[AttemptResult[String]]): Move[F, String] = Move(ConsoleStrategy[F], guess)
 }

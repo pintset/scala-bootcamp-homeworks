@@ -2,7 +2,7 @@ package client.services
 
 import cats.effect.{Async, Concurrent, Resource}
 import common.domain.{AttemptResult, ErrorResponse, GameId, Guess, NewGame}
-import io.circe.Decoder
+import io.circe.{Decoder, Encoder}
 import org.http4s.client.dsl.Http4sClientDsl
 import org.http4s.{Method, Request, Uri}
 import cats.syntax.bifunctor._
@@ -14,7 +14,7 @@ import client.GameService
 import org.http4s.ember.client.EmberClientBuilder
 
 object Http {
-  def apply[F[_]: Concurrent](client: org.http4s.client.Client[F], host: Uri): GameService[F] = {
+  def apply[F[_]: Concurrent, A: Encoder: Decoder](client: org.http4s.client.Client[F], host: Uri): GameService[F, A] = {
     val dsl = new Http4sClientDsl[F] {}
     import dsl._
 
@@ -26,16 +26,16 @@ object Http {
         }.rethrowT
       }
 
-    new GameService[F] {
-      def start(settings: NewGame): F[GameId] =
+    new GameService[F, A] {
+      def start(settings: NewGame[A]): F[GameId] =
         expect[GameId](Method.POST(settings, host / "start"))
 
-      def guess(gameId: GameId, guess: Int): F[AttemptResult] =
-        expect[AttemptResult](Method.POST(Guess(gameId, guess), host / "guess"))
+      def guess(gameId: GameId, guess: A): F[AttemptResult[A]] =
+        expect[AttemptResult[A]](Method.POST(Guess(gameId, guess), host / "guess"))
     }
   }
 
-  def resource[F[_] : Async](host: Uri): Resource[F, GameService[F]] =
+  def resource[F[_]: Async, A: Encoder: Decoder](host: Uri): Resource[F, GameService[F, A]] =
     EmberClientBuilder.default[F].build
       // .map { org.http4s.client.middleware.Logger(logHeaders = false, logBody = true) }
       .map { client => apply(client, host) }

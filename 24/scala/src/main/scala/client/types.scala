@@ -3,9 +3,9 @@ package client
 import common.domain.{AttemptResult, NewGame}
 
 object types {
-  final case class Move[F[_]](getNext: F[Int], guess: Int => F[AttemptResult])
+  final case class Move[F[_], A](getNext: F[A], guess: A => F[AttemptResult[A]])
 
-  type GameClient[F[_]] = Int => F[AttemptResult]
-  type GameStrategy[F[_]] = F[Int]
-  type Game[F[_]] = NewGame => F[AttemptResult]
+  type GameClient[F[_], A] = A => F[AttemptResult[A]]
+  type GameStrategy[F[_], A] = F[A]
+  type Game[F[_], A] = NewGame[A] => F[AttemptResult[A]]
 }

@@ -8,7 +8,7 @@ import cats.syntax.functor._
 import cats.effect.syntax.concurrent._
 
 object GameClient {
-  def apply[F[_] : Concurrent](game: GameService[F]): NewGame => F[Int => F[AttemptResult]] =
+  def apply[F[_] : Concurrent, A](game: GameService[F, A]): NewGame[A] => F[A => F[AttemptResult[A]]] =
     settings =>
       game.start(settings)
         .memoize

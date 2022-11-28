@@ -10,16 +10,17 @@ import io.circe.generic.auto._
 import common.domain.AttemptResult.codec
 import GameNotFound.encoder
 import cats.effect.kernel.Concurrent
+import io.circe.{Decoder, Encoder}
 
 object Http {
-  def apply[F[_] : Concurrent](gameServer: GameServer[F]): HttpRoutes[F] = {
+  def apply[F[_]: Concurrent, A: Encoder: Decoder](gameServer: GameServer[F, A]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}
     import dsl._
 
     HttpRoutes.of[F] {
       case req @ POST -> Root / "guess" =>
         req
-          .as[Guess]
+          .as[Guess[A]]
           .flatMap { guess =>
             gameServer
               .guess(guess.gameId, guess.guess)
@@ -28,8 +29,8 @@ object Http {
 
       case req @ POST -> Root / "start" =>
         req
-          .as[NewGame]
-          .flatMap { newGame => gameServer.start(newGame.min, newGame.max, newGame.attemptCount) }
+          .as[NewGame[A]]
+          .flatMap { newGame => gameServer.start(newGame.attemptCount) }
           .flatMap(Created(_))
     }
   }
