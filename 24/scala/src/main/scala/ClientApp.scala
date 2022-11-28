@@ -63,8 +63,8 @@ object ClientApp extends IOApp.Simple {
   def program[F[_]: Async]: F[Unit] = {
     implicit val console: Console[F] = Console.make[F]
 
-    // val settingsService = SettingsService[F]
-    val settingsService = SettingsService.console
+    val settingsService = SettingsService[F]
+    // val settingsService = SettingsService.console
     // val gameBuilder = botGame[F] _
     val gameBuilder = consoleGame[F] _
 

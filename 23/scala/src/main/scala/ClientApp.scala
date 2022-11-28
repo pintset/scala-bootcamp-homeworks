@@ -17,14 +17,13 @@ import common.domain.{AttemptResult, NewGame}
 import org.slf4j.LoggerFactory
 
 object ClientApp extends IOApp.Simple {
-  def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
+  def decorateMove[F[_]: Sync](move: Move[F])(implicit c: Console[F]): Move[F] = {
     def getNext: F[Int] =
-      Console[F].putStr("Enter your guess: ") >> move.getNext.handleErrorWith { _ =>
-        Console[F].putStrLn("Failed to parse your input. Please try again") >> getNext
-      }
+      { c.putStr("Enter your guess: ") >> move.getNext }
+        .handleErrorWith { _ => c.putStrLn("Failed to parse your input. Please try again") >> getNext }
 
     val show = common.domain.gameResultShow.show _
-    val guess = move.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+    val guess = move.guess >=> { result => c.putStrLn(show(result)).as(result) }
 
     Move(getNext, guess)
   }
@@ -36,20 +35,20 @@ object ClientApp extends IOApp.Simple {
     loop
   }
 
-  def consoleGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
+  def consoleGame[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map(gameLoop[F])
 
-  def botGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
+  def botGame[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
     guessF(settings)
       .map(BotStrategy.move[F] _ andThen decorateMove[StateT[F, MoveState, *]])
       .flatMap { move =>
         val m =
-          move.copy(getNext = move.getNext >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) })
+          move.copy(getNext = move.getNext >>= { number => Console.apply[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) })
 
         gameLoop(m).runA(MoveState(settings.min, settings.max, None))
       }
 
-  def consoleGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
+  def consoleGamePure[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _).map(gameLoop[F])
 
   def botGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
@@ -57,11 +56,11 @@ object ClientApp extends IOApp.Simple {
       .map(BotStrategy.move[F])
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
 
-  def program[F[_] : Concurrent : ContextShift : ConcurrentEffect]: F[Unit] = {
-    val settingsService = SettingsService[F]
-    // val settingsService = SettingsService.console
-    val gameBuilder = botGame[F] _
-    // val gameBuilder = consoleGame[F] _
+  def program[F[_]: Concurrent: ContextShift: ConcurrentEffect: Console]: F[Unit] = {
+    // val settingsService = SettingsService[F]
+    val settingsService = SettingsService.console
+    // val gameBuilder = botGame[F] _
+    val gameBuilder = consoleGame[F] _
 
     GameClient.resource[F](uri"http://localhost:9001")
       .map { gameBuilder }
@@ -71,6 +70,8 @@ object ClientApp extends IOApp.Simple {
 
   def run: IO[Unit] = {
     LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext].stop()
+    implicit val console = Console.make[IO]
+
     program[IO]
   }
 }

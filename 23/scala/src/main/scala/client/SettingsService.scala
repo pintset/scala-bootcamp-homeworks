@@ -15,7 +15,7 @@ object SettingsService {
     def getSettings: F[NewGame] = Applicative[F].pure(NewGame(0, 100, 5))
   }
 
-  def console[F[_] : Sync]: SettingsService[F] = new SettingsService[F] {
+  def console[F[_]: Sync: Console]: SettingsService[F] = new SettingsService[F] {
     def getSettings: F[NewGame] = {
       (Console.inputIntWithRetry("Enter min number: "),
         Console.inputIntWithRetry("Enter max number: "),

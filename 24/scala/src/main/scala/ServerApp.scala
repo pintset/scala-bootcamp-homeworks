@@ -20,7 +20,7 @@ object ServerApp extends IOApp.Simple {
     GameServer.of[IO](getNextGuess).flatMap { gameServer =>
       EmberServerBuilder
         .default[IO]
-        .withHost(ipv4"127.0.0.1")
+        .withHost(host"localhost")
         .withPort(port"9001")
         .withMaxConnections(1000)
         .withHttpWebSocketApp(builder => (routes.Http(gameServer) <+> routes.Ws(gameServer, builder)).orNotFound)

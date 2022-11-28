@@ -13,7 +13,7 @@ object domain {
     implicit val encoder: Encoder[GameId] = Encoder[UUID].contramap[GameId](gameId => gameId.uuid)
     implicit val decoder: Decoder[GameId] = Decoder[UUID].map(uuid => GameId(uuid))
 
-    def generate[F[_] : Sync]: F[GameId] = GenUUID[F].createUUID.map(GameId(_))
+    def generate[F[_]: Sync: GenUUID]: F[GameId] = GenUUID[F].createUUID.map(GameId(_))
   }
 
   sealed trait GameAction
