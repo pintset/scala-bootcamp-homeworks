@@ -13,7 +13,7 @@ object domain {
     implicit val encoder: Encoder[GameId] = Encoder[UUID].contramap[GameId](gameId => gameId.uuid)
     implicit val decoder: Decoder[GameId] = Decoder[UUID].map(uuid => GameId(uuid))
 
-    def generate[F[_] : Sync]: F[GameId] = GenUUID[F].createUUID.map(GameId(_))
+    def generate[F[_]: Sync](implicit idGen: GenUUID[F]): F[GameId] = idGen.createUUID.map(GameId(_))
   }
 
   sealed trait GameAction
@@ -50,13 +50,11 @@ object domain {
   }
 
   import cats.Show
-  implicit val gameResultShow = new Show[AttemptResult] {
-    def show(t: AttemptResult): String = t match {
-      case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempts to guess $guess"
-      case GameOver(answer) => s"You lost. Correct answer is $answer"
-      case Greater(attemptsLeft) => s"Try to guess lower number. You have $attemptsLeft attempts left"
-      case Lower(attemptsLeft) => s"Try to guess greater number. You have $attemptsLeft attempts left"
-    }
+  implicit val gameResultShow: Show[AttemptResult] = {
+    case YouWon(attemptsUsed, guess) => s"You won. You used $attemptsUsed attempt(s) to guess $guess"
+    case GameOver(answer) => s"You lost. Correct answer is $answer"
+    case Greater(attemptsLeft) => s"Try to guess lower number. You have $attemptsLeft attempt(s) left"
+    case Lower(attemptsLeft) => s"Try to guess greater number. You have $attemptsLeft attempt(s) left"
   }
 
   final case class YouWon(attemptsUsed: Int, guess: Int) extends AttemptResult
@@ -70,7 +68,7 @@ object domain {
   object GameNotFound {
     import io.circe.generic.auto._
 
-    implicit val encoder = Encoder[ErrorResponse].contramap[GameNotFound] { gameNotFound =>
+    implicit val encoder: Encoder[GameNotFound] = Encoder[ErrorResponse].contramap { gameNotFound =>
       ErrorResponse(s"There is no game with id: ${gameNotFound.gameId.uuid}")
     }
   }

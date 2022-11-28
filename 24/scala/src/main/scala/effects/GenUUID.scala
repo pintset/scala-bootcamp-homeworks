@@ -8,7 +8,7 @@ trait GenUUID[F[_]] {
 }
 
 object GenUUID {
-  def apply[F[_]: Sync]: GenUUID[F] = new GenUUID[F] {
+  def make[F[_]: Sync]: GenUUID[F] = new GenUUID[F] {
     def createUUID: F[UUID] =  Sync[F].delay(UUID.randomUUID)
   }
 }

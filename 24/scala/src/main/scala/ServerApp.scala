@@ -1,31 +1,31 @@
-import cats.effect.{Concurrent, IO, IOApp}
-import cats.implicits.toSemigroupKOps
+import cats.effect.{IO, IOApp}
+import com.comcast.ip4s.IpLiteralSyntax
+import effects.GenUUID
 import server.routes
-import org.http4s.HttpApp
-
-import scala.concurrent.ExecutionContext
+import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
-import org.http4s.server.blaze.BlazeServerBuilder
 import server.GameServer
+import cats.syntax.semigroupk._
 
-import ch.qos.logback.classic.LoggerContext
-import org.slf4j.LoggerFactory
+import scala.util.Random
 
 object ServerApp extends IOApp.Simple {
-  private def httpApp[F[_]: Concurrent](gameServer: GameServer[F]): HttpApp[F] =
-    { routes.Http(gameServer) <+> routes.Ws(gameServer) }.orNotFound
-
   def run: IO[Unit] = {
-    LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext].stop()
+    implicit val genUUID = GenUUID.make[IO]
 
-    GameServer.of[IO].flatMap { gameServer =>
-      BlazeServerBuilder[IO](ExecutionContext.global)
-        .bindHttp(port = 9001, host = "localhost")
-        .withConnectorPoolSize(1000)
-        .withHttpApp(httpApp(gameServer))
-        .serve
-        .compile
-        .drain
+    def getNextGuess(min: Int, max: Int): IO[Int] =
+      IO(Random.between(min, max + 1))
+        .flatTap(guess => IO.println(s"Guessed number: $guess"))
+
+    GameServer.of[IO](getNextGuess).flatMap { gameServer =>
+      EmberServerBuilder
+        .default[IO]
+        .withHost(ipv4"127.0.0.1")
+        .withPort(port"9001")
+        .withMaxConnections(1000)
+        .withHttpWebSocketApp(builder => (routes.Http(gameServer) <+> routes.Ws(gameServer, builder)).orNotFound)
+        .build
+        .useForever
     }
   }
 }

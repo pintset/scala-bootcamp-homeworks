@@ -1,30 +1,28 @@
 import cats.data.StateT
-import cats.Monad
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, IO, IOApp, Sync}
+import cats.{Monad, Show}
+import cats.effect.std.Console
+import cats.effect.{Async, IO, IOApp, Sync}
 import cats.implicits.catsSyntaxFunction1FlatMap
 import client.SettingsService
-import effects.Console
 import org.http4s.implicits.http4sLiteralsSyntax
 import cats.syntax.functor._
 import cats.syntax.flatMap._
 import cats.syntax.applicativeError._
-import ch.qos.logback.classic.LoggerContext
 import client._
 import client.strategies.BotStrategy.MoveState
 import client.strategies.{BotStrategy, ConsoleStrategy}
 import client.types.{Game, GameClient, Move}
 import common.domain.{AttemptResult, NewGame}
-import org.slf4j.LoggerFactory
 
 object ClientApp extends IOApp.Simple {
-  def decorateMove[F[_] : Sync](move: Move[F]): Move[F] = {
-    def getNext: F[Int] =
-      Console[F].putStr("Enter your guess: ") >> move.getNext.handleErrorWith { _ =>
-        Console[F].putStrLn("Failed to parse your input. Please try again") >> getNext
-      }
+  def decorateMove[F[_]: Sync](move: Move[F])(implicit c: Console[F]): Move[F] = {
+    def getNext: F[Int] = {
+      { c.print("Enter your guess: ") >> move.getNext }
+        .handleErrorWith { _ => c.println("Failed to parse your input. Please try again") >> getNext }
+    }
 
-    val show = common.domain.gameResultShow.show _
-    val guess = move.guess >=> { result => Console[F].putStrLn(show(result)).as(result) }
+    implicit val show: Show[AttemptResult] = common.domain.gameResultShow
+    val guess = move.guess >=> { result => c.println(result).as(result) }
 
     Move(getNext, guess)
   }
@@ -41,20 +39,20 @@ object ClientApp extends IOApp.Simple {
     loop
   }
 
-  def consoleGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
+  def consoleGame[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map(gameLoop[F])
 
-  def botGame[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
+  def botGame[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
     guessF(settings)
       .map(BotStrategy.move[F] _ andThen decorateMove[StateT[F, MoveState, *]])
       .flatMap { move =>
         val m =
-          move.copy(getNext = move.getNext >>= { number => Console[StateT[F, MoveState, *]].putStrLn(number.toString).as(number) })
+          move.copy(getNext = move.getNext >>= { number => Console[StateT[F, MoveState, *]].println(number).as(number) })
 
         gameLoop(m).runA(MoveState(settings.min, settings.max, None))
       }
 
-  def consoleGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] =
+  def consoleGamePure[F[_]: Sync: Console](guessF: NewGame => F[GameClient[F]]): Game[F] =
     guessF >=> (ConsoleStrategy.move[F] _).map(gameLoop[F])
 
   def botGamePure[F[_] : Sync](guessF: NewGame => F[GameClient[F]]): Game[F] = settings =>
@@ -62,21 +60,20 @@ object ClientApp extends IOApp.Simple {
       .map(BotStrategy.move[F])
       .flatMap { move => gameLoop(move).runA(MoveState(settings.min, settings.max, None)) }
 
-  def program[F[_] : Concurrent : ContextShift : ConcurrentEffect]: F[Unit] = {
-    val settingsService = SettingsService[F]
-    // val settingsService = SettingsService.console
-    val gameBuilder = botGame[F] _
-    // val gameBuilder = consoleGame[F] _
+  def program[F[_]: Async]: F[Unit] = {
+    implicit val console: Console[F] = Console.make[F]
 
-    // services.Http.resource[F](uri"http://localhost:9001")
-    services.Ws.resource[F](uri"ws://localhost:9001")
+    // val settingsService = SettingsService[F]
+    val settingsService = SettingsService.console
+    // val gameBuilder = botGame[F] _
+    val gameBuilder = consoleGame[F] _
+
+     // services.Http.resource[F](uri"http://localhost:9001")
+     services.Ws.resource[F](uri"ws://localhost:9001")
       .map { GameClient[F] _ andThen gameBuilder }
       .use { game => settingsService.getSettings >>= game }
       .void
   }
 
-  def run: IO[Unit] = {
-    LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext].stop()
-    program[IO]
-  }
+  def run: IO[Unit] = program[IO]
 }

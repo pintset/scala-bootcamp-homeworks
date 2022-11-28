@@ -1,15 +1,16 @@
 package server
 
+import cats.Monad
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.Ref
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import common.domain.{AttemptResult, GameId, GameOver, Greater, Lower, YouWon}
-import effects.GenInt
+import effects.GenUUID
 
 trait GameServer[F[_]] {
   def start(min: Int, max: Int, attemptCount: Int): F[GameId]
-  def guess(gameId: GameId, number: Int): F[Option[AttemptResult]]
+  def guess(gameId: GameId, guess: Int): F[Option[AttemptResult]]
 }
 
 object GameServer {
@@ -21,20 +22,29 @@ object GameServer {
       else Lower(attemptsLeft)
   }
 
-  def of[F[_]: Sync]: F[GameServer[F]] = {
+  def of[F[_]: Sync: GenUUID](getNextGuess: (Int, Int) => F[Int]): F[GameServer[F]] = {
+    def modifyMaybe[A, B](ref: Ref[F, A])(f: A => Option[(A, B)])(implicit F: Monad[F]): F[Option[B]] =
+      ref.access.flatMap {
+        case (a, set) =>
+          f(a) match {
+            case Some((a, b)) => set(a).ifM(ifTrue = F.pure(Some(b)), ifFalse = modifyMaybe(ref)(f))
+            case None => F.pure(Option.empty[B])
+          }
+      }
+
     Ref.of[F, Map[GameId, Game]](Map.empty).map { gameMapRef =>
       new GameServer[F] {
         def start(min: Int, max: Int, attemptCount: Int): F[GameId] = {
           for {
             gameId <- GameId.generate
-            guess <- GenInt(min, max).generateInt
-            _ <- effects.Console[F].putStrLn(s"Guessed number: $guess")
+            guess <- getNextGuess(min, max)
+
             _ <- gameMapRef.update(_ + (gameId -> Game(guess, attemptCount, attemptCount)))
           } yield gameId
         }
 
         def guess(gameId: GameId, guess: Int): F[Option[AttemptResult]] =
-          gameMapRef.modifyMaybe { games =>
+          modifyMaybe(gameMapRef) { games =>
             games.get(gameId).map { game =>
               val newGame = game.copy(attemptsLeft = game.attemptsLeft - 1)
               val attemptResult = newGame.result(guess)
