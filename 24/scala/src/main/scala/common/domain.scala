@@ -86,7 +86,7 @@ object domain {
 
   final case class YouWon[A](attemptsUsed: Int, guess: A) extends AttemptResult[A]
   final case class GameOver[A](answer: A) extends AttemptResult[A]
-  final case class TryAgain[A](guess: A, mask: Array[LetterPosition]) extends AttemptResult[A]
+  final case class TryAgain[A](guess: A, mask: List[LetterPosition]) extends AttemptResult[A]
 
   final case class ErrorResponse(error: String)
 
@@ -99,20 +99,29 @@ object domain {
     }
   }
 
-  implicit val gameResult =
-    new GameResult[String] {
-      def result(game: server.Game[String], guess: String): domain.AttemptResult[String] = {
-        def buildMask(guess: String): Array[LetterPosition] =
-          guess.zipWithIndex.map { case (l, i) =>
-            if (game.answer(i) == l) Correct
-            else if ((i + 1) < game.answer.length && game.answer.substring(i + 1).contains(l)) Incorrect
-            else Missing
-          }.toArray
+  implicit val gameResult: GameResult[String] = (game, guess) => {
+    def buildMask(answer: String, guess: String): List[LetterPosition] = {
+      val x = answer.map(Option(_)).zipWithIndex
+      guess.zipWithIndex
+        .foldLeft((x, List.empty[LetterPosition])) { (state, item) =>
+          val answer = state._1
+          val mask = state._2
+          val l = item._1
+          val i = item._2
 
-
-        if (game.answer == guess) YouWon(game.attemptCount - game.attemptsLeft, game.answer)
-        else if (game.attemptsLeft == 0) GameOver(game.answer)
-        else TryAgain(guess, buildMask(guess))
-      }
+          if (answer(i)._1.contains(l)) (answer.updated(i, (None, i)), Correct :: mask)
+          else {
+            val j = answer.indexWhere { case (x, i) => !answer(i)._1.contains(guess(i)) && x.contains(l)}
+            if (j > 0) (answer.updated(j, (None, j)), Incorrect :: mask)
+            else
+              (answer, Missing :: mask)
+          }
+        }._2.reverse
     }
+
+
+    if (game.answer == guess) YouWon(game.attemptCount - game.attemptsLeft, game.answer)
+    else if (game.attemptsLeft == 0) GameOver(game.answer)
+    else TryAgain(guess, buildMask(game.answer, guess))
+  }
 }

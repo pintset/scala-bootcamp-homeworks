@@ -13,12 +13,16 @@ import client.strategies.ConsoleStrategy
 import client.types.{Game, GameClient, Move}
 import common.domain.{AttemptResult, NewGame, TryAgain}
 import client._
+import common.WordsDb
 import io.circe.{Decoder, Encoder}
 
 object ClientApp extends IOApp.Simple {
-  def decorateMove[F[_]: Sync](move: Move[F, String])(implicit c: Console[F]): Move[StateT[F, List[String], *], String] = {
+  def decorateMove[F[_]: Sync](wordsDb: WordsDb[F])(move: Move[F, String])(implicit c: Console[F]): Move[StateT[F, List[String], *], String] = {
     val getNextG: StateT[F, List[String], String] = StateT.inspectF { results =>
-      results.traverse(c.println) >> c.print("Enter your guess: ") >> move.getNext
+      def loop: F[String] = results.traverse(c.println) >> c.print("Enter your guess: ") >> move.getNext >>=
+        { word => wordsDb.isValidWord(word).ifM(Sync[F].pure(word), c.println("Please try another word") >> loop) }
+
+      loop
     }
 
     implicit val show: Show[AttemptResult[String]] = common.domain.gameResultShow
@@ -60,8 +64,8 @@ object ClientApp extends IOApp.Simple {
     loop
   }
 
-  def consoleGame[F[_]: Sync: Console](guessF: NewGame[String] => F[GameClient[F, String]]): Game[F, String] =
-    guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F]).map { move =>
+  def consoleGame[F[_]: Sync: Console](wordsDb: WordsDb[F])(guessF: NewGame[String] => F[GameClient[F, String]]): Game[F, String] =
+    guessF >=> (ConsoleStrategy.move[F] _ andThen decorateMove[F](wordsDb)).map { move =>
       gameLoop[StateT[F, List[String], *], String](move).runA(List.empty)
     }
 
@@ -71,9 +75,8 @@ object ClientApp extends IOApp.Simple {
     val settingsService = SettingsService[F, A]
     // val settingsService = SettingsService.console
 
-     // services.Http.resource[F](uri"http://localhost:9001")
-
-    services.Ws.resource[F, A](uri"ws://localhost:9001")
+    services.Http.resource[F, A](uri"http://localhost:9001")
+    // services.Ws.resource[F, A](uri"ws://localhost:9001")
       .map { GameClient[F, A] _ andThen gameBuilder }
       .use { game => settingsService.getSettings >>= game }
       .void
@@ -81,6 +84,6 @@ object ClientApp extends IOApp.Simple {
 
   def run: IO[Unit] = {
     // implicit val stringCodec = Codec.from(Decoder[String], Encoder[String])
-    program[IO, String](consoleGame[IO])
+    WordsDb.make[IO](WordsDb.validWords) >>= { wordsDb => program[IO, String](consoleGame[IO](wordsDb)) }
   }
 }
