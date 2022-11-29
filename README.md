@@ -1,10 +1,12 @@
 # Scala Bootcamp 2021 Homeworks
 
-This repo contains homeworks for Scala Bootcamp 2021
+This repo contains 22 homeworks for Scala Bootcamp 2021
 
 [![Scala CI](https://github.com/pintset/scala-bootcamp-homeworks/actions/workflows/bootcamp.yml/badge.svg)](https://github.com/pintset/scala-bootcamp-homeworks/actions/workflows/bootcamp.yml)
 
 The schedule can be found here: https://github.com/evolution-gaming/scala-bootcamp/blob/bfb1594afa73909f486e1f59f918a6186856b3e7/Schedule.md
+
+IMO most interesting are: [24](24), [18](18), [19](19), [21](21). But you can look at any below.
 
 ## Contents
 
