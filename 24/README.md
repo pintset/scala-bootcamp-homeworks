@@ -2,7 +2,7 @@
 
 ### Guessing Game
 
-Write a server and a client that play a number guessing game together. The same as Homework 23 but communication has to be done using WebSocket
+Write a server and a client that play a number guessing game together. The same as [Homework 23](https://github.com/pintset/scala-bootcamp-homeworks/tree/main/23) but communication has to be done using WebSocket
 
 Communication flow should be as follows:
 
@@ -84,6 +84,6 @@ services.Ws.resource[F](uri"ws://localhost:9001")
   .void
 
 ```
-6. This version is updated to use Ember and Cats 3. There is a http version of the game written with [Blaze and Cats 2](23)
-7. I wanted to create the second game inside this project - Wordle, but generalization of the current implementation into generic-guess game makes the code complex to understand. It looks like some other code design approach is required in the first place. However, you can find generalized against guess (where a guess is`String`, not `Int`) working version of Wordle here: https://github.com/pintset/scala-bootcamp-homeworks/tree/HW-24-Wordle
+6. This version is updated to use Ember and Cats 3. There is a http version of the game written with [Blaze and Cats 2](https://github.com/pintset/scala-bootcamp-homeworks/tree/main/23)
+7. I wanted to create the second game inside this project - Wordle, but generalization of the current implementation into generic-guess game makes the code complex to understand. It looks like some other code design approach is required in the first place. However, you can find generalized against guess (where a guess is`String`, not `Int`) working version of Wordle here: https://github.com/pintset/scala-bootcamp-homeworks/tree/HW-24-Wordle/24
 
