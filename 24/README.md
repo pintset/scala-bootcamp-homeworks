@@ -2,4 +2,4 @@
 
 ### Wordle
 
-In progress...
+Works but implementation has not been finished yet.
